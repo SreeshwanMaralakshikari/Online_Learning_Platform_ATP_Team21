@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
@@ -22,16 +24,13 @@ export default function InstructorDashboard() {
     const fetchDashboard = async () => {
       try {
         const [coursesRes, doubtsRes] = await Promise.all([
-          fetch("/instructor-api/courses", { credentials: "include" }),
-          fetch("/instructor-api/doubts", { credentials: "include" }),
+          axiosInstance.get("/instructor-api/courses"),
+          axiosInstance.get("/instructor-api/doubts")
         ]);
-        const coursesData = await coursesRes.json();
-        const doubtsData = await doubtsRes.json();
-        if (!coursesRes.ok) throw new Error(coursesData.message);
-        setCourses(coursesData.payload || []);
-        if (doubtsRes.ok) setDoubts(doubtsData.payload || []);
+        setCourses(coursesRes.data.payload || []);
+        setDoubts(doubtsRes.data.payload || []);
       } catch (err) {
-        setError(err.message || "Failed to load courses");
+        setError(err.response?.data?.message || err.message || "Failed to load courses");
       } finally {
         setLoading(false);
       }
@@ -51,18 +50,12 @@ export default function InstructorDashboard() {
     setError("");
 
     try {
-      const res = await fetch(`/instructor-api/doubts/${doubtId}/reply`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ reply }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to reply");
-      setDoubts((items) => items.map((item) => (item._id === doubtId ? data.payload : item)));
+      const res = await axiosInstance.patch(`/instructor-api/doubts/${doubtId}/reply`, { reply })
+      // axios throws on non-2xx automatically
+      setDoubts((items) => items.map((item) => (item._id === doubtId ? res.data.payload : item)));
       setReplyDrafts((items) => ({ ...items, [doubtId]: "" }));
     } catch (err) {
-      setError(err.message || "Failed to reply");
+      setError(err.response?.data?.message || err.message || "Failed to reply");
     } finally {
       setReplying(null);
     }
@@ -71,19 +64,12 @@ export default function InstructorDashboard() {
   const handleActivate = async (course) => {
     setToggling(course._id);
     try {
-      const res = await fetch("/instructor-api/courses/activate", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ courseId: course._id, isCourseActive: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      setCourses((prev) =>
+      const res = await axiosInstance.patch("/instructor-api/courses/activate", { courseId: course._id, isCourseActive: true })
+            setCourses((prev) =>
         prev.map((c) => (c._id === course._id ? { ...c, isCourseActive: true } : c))
       );
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message || "Failed to update course");
     } finally {
       setToggling(null);
     }
@@ -93,19 +79,12 @@ export default function InstructorDashboard() {
     setToggling(course._id);
     setConfirmDelete(null);
     try {
-      const res = await fetch("/instructor-api/courses/deactivate", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ courseId: course._id, isCourseActive: false }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      setCourses((prev) =>
+      const res = await axiosInstance.patch("/instructor-api/courses/deactivate", { courseId: course._id, isCourseActive: false })
+            setCourses((prev) =>
         prev.map((c) => (c._id === course._id ? { ...c, isCourseActive: false } : c))
       );
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message || "Failed to update course");
     } finally {
       setToggling(null);
     }

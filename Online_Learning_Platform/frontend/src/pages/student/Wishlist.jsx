@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { Link, useNavigate } from "react-router-dom";
 
 function formatPrice(price) {
@@ -22,12 +24,11 @@ export default function Wishlist() {
   useEffect(() => {
     const fetchWishlist = async () => {
       try {
-        const res = await fetch("/student-api/wishlist", { credentials: "include" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to load wishlist");
-        setItems((data.payload || []).filter((item) => item.course));
+        const res = await axiosInstance.get("/student-api/wishlist");
+        // axios throws on non-2xx automatically
+        setItems((res.data.payload || []).filter((item) => item.course));
       } catch (err) {
-        setError(err.message || "Failed to load wishlist");
+        setError(err.response?.data?.message || err.message || "Failed to load wishlist");
       } finally {
         setLoading(false);
       }
@@ -41,15 +42,11 @@ export default function Wishlist() {
     setError("");
 
     try {
-      const res = await fetch(`/student-api/wishlist/${courseId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to remove course");
+      const res = await axiosInstance.delete(`/student-api/wishlist/${courseId}`);
+      // axios throws on non-2xx automatically
       setItems((current) => current.filter((item) => (item.course?._id ?? item.course) !== courseId));
     } catch (err) {
-      setError(err.message || "Failed to remove course");
+      setError(err.response?.data?.message || err.message || "Failed to remove course");
     } finally {
       setRemovingId("");
     }

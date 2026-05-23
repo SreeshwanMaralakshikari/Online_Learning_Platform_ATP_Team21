@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import axiosInstance from "../axiosInstance";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -26,21 +27,11 @@ export default function Register() {
     setError("");
 
     try {
-      const res = await fetch("/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message || data.error || "Registration failed");
-      } else {
-        setSuccess(true);
-        setTimeout(() => navigate("/login"), 2000);
-      }
-    } catch {
-      setError("Unable to reach server. Check your connection.");
+      await axiosInstance.post("/auth/register", form);
+      setSuccess(true);
+      setTimeout(() => navigate("/login"), 2000);
+    } catch (err) {
+      setError(err.response?.data?.message || err.response?.data?.error || "Registration failed");
     } finally {
       setLoading(false);
     }

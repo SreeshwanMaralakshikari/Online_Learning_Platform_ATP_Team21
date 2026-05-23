@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { Link } from "react-router-dom";
 
 const ROLE_STYLE = {
@@ -37,13 +39,11 @@ export default function ManageUsers() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch("/admin-api/users", { credentials: "include" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      setUsers(data.payload || []);
-      setFiltered(data.payload || []);
+      const res = await axiosInstance.get("/admin-api/users");
+            setUsers(res.data.payload || []);
+      setFiltered(res.data.payload || []);
     } catch (err) {
-      setError(err.message || "Failed to load users");
+      setError(err.response?.data?.message || err.message || "Failed to load users");
     } finally {
       setLoading(false);
     }
@@ -54,19 +54,12 @@ export default function ManageUsers() {
     const newState = !user.isUserActive;
     const endpoint = newState ? "activate" : "deactivate";
     try {
-      const res = await fetch(`/admin-api/users/${endpoint}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ userId: user._id, isUserActive: newState }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      setUsers((prev) =>
+      const res = await axiosInstance.patch(`/admin-api/users/${endpoint}`, { userId: user._id, isUserActive: newState });
+            setUsers((prev) =>
         prev.map((u) => (u._id === user._id ? { ...u, isUserActive: newState } : u))
       );
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message || "Failed to update user");
     } finally {
       setToggling(null);
     }

@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
@@ -24,21 +26,14 @@ export default function AdminDashboard() {
     const fetchStats = async () => {
       try {
         const [usersRes, coursesRes, analyticsRes] = await Promise.all([
-          fetch("/admin-api/users", { credentials: "include" }),
-          fetch("/admin-api/courses", { credentials: "include" }),
-          fetch("/admin-api/analytics", { credentials: "include" }),
+          axiosInstance.get("/admin-api/users"),
+          axiosInstance.get("/admin-api/courses"),
+          axiosInstance.get("/admin-api/analytics")
         ]);
-        const usersData = await usersRes.json();
-        const coursesData = await coursesRes.json();
-        const analyticsData = await analyticsRes.json();
 
-        if (!usersRes.ok) throw new Error(usersData.message);
-        if (!coursesRes.ok) throw new Error(coursesData.message);
-        if (!analyticsRes.ok) throw new Error(analyticsData.message);
-
-        const users = usersData.payload || [];
-        const courses = coursesData.payload || [];
-        const analytics = analyticsData.payload || {};
+        const users = usersRes.data.payload || [];
+        const courses = coursesRes.data.payload || [];
+        const analytics = analyticsRes.data.payload || {};
 
         setStats({
           totalUsers: users.length,
@@ -55,7 +50,7 @@ export default function AdminDashboard() {
         });
         setLeaderboard(analytics.leaderboard || []);
       } catch (err) {
-        setError(err.message || "Failed to load stats");
+        setError(err.response?.data?.message || err.message || "Failed to load stats");
       } finally {
         setLoading(false);
       }

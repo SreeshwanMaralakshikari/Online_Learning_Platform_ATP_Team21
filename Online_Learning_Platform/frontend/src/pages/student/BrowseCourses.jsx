@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { useNavigate } from "react-router-dom";
 
 function formatPrice(price) {
@@ -28,19 +30,14 @@ export default function BrowseCourses() {
     const fetchCourses = async () => {
       try {
         const [res, wishlistRes] = await Promise.all([
-          fetch("/student-api/courses", { credentials: "include" }),
-          fetch("/student-api/wishlist", { credentials: "include" }),
+          axiosInstance.get("/student-api/courses"),
+          axiosInstance.get("/student-api/wishlist")
         ]);
-        const data = await res.json();
-        const wishlistData = await wishlistRes.json();
-        if (!res.ok) throw new Error(data.message || "Failed to load courses");
-        setCourses(data.payload || []);
-        setFiltered(data.payload || []);
-        if (wishlistRes.ok) {
-          setWishlistIds(new Set((wishlistData.payload || []).map((item) => item.course?._id ?? item.course)));
-        }
+        setCourses(res.data.payload || []);
+        setFiltered(res.data.payload || []);
+        setWishlistIds(new Set((wishlistRes.data.payload || []).map((item) => item.course?._id ?? item.course)));
       } catch (err) {
-        setError(err.message || "Failed to load courses");
+        setError(err.response?.data?.message || err.message || "Failed to load courses");
       } finally {
         setLoading(false);
       }
@@ -77,14 +74,10 @@ export default function BrowseCourses() {
     setActionError("");
 
     try {
-      const res = await fetch(isSaved ? `/student-api/wishlist/${courseId}` : "/student-api/wishlist", {
-        method: isSaved ? "DELETE" : "POST",
-        headers: isSaved ? undefined : { "Content-Type": "application/json" },
-        credentials: "include",
-        body: isSaved ? undefined : JSON.stringify({ courseId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Unable to update wishlist");
+      const res = await (isSaved
+        ? axiosInstance.delete(`/student-api/wishlist/${courseId}`)
+        : axiosInstance.post("/student-api/wishlist", { courseId }));
+      // axios throws on non-2xx automatically
 
       setWishlistIds((current) => {
         const next = new Set(current);

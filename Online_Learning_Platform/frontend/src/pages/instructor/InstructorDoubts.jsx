@@ -1,4 +1,6 @@
+
 import { useEffect, useMemo, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { Link } from "react-router-dom";
 
 const LAST_SEEN_KEY = "instructor-doubts-last-seen";
@@ -24,13 +26,12 @@ export default function InstructorDoubts() {
   useEffect(() => {
     const loadDoubts = async () => {
       try {
-        const res = await fetch("/instructor-api/doubts", { credentials: "include" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to load doubts");
-        setDoubts(data.payload || []);
+        const res = await axiosInstance.get("/instructor-api/doubts");
+        // axios throws on non-2xx automatically
+        setDoubts(res.data.payload || []);
         window.localStorage.setItem(LAST_SEEN_KEY, String(Date.now()));
       } catch (err) {
-        setError(err.message || "Failed to load doubts");
+        setError(err.response?.data?.message || err.message || "Failed to load doubts");
       } finally {
         setLoading(false);
       }
@@ -56,18 +57,12 @@ export default function InstructorDoubts() {
     setError("");
 
     try {
-      const res = await fetch(`/instructor-api/doubts/${doubtId}/reply`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ reply }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to reply");
-      setDoubts((items) => items.map((item) => (item._id === doubtId ? data.payload : item)));
+      const res = await axiosInstance.patch(`/instructor-api/doubts/${doubtId}/reply`, { reply });
+      // axios throws on non-2xx automatically
+      setDoubts((items) => items.map((item) => (item._id === doubtId ? res.data.payload : item)));
       setReplyDrafts((items) => ({ ...items, [doubtId]: "" }));
     } catch (err) {
-      setError(err.message || "Failed to reply");
+      setError(err.response?.data?.message || err.message || "Failed to reply");
     } finally {
       setReplying(null);
     }

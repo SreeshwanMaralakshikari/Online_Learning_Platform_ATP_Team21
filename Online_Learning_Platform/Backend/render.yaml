@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: olp-backend
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DB_URL
+        sync: false          # set manually in Render dashboard
+      - key: SECRET_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false          # e.g. https://your-olp.vercel.app
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

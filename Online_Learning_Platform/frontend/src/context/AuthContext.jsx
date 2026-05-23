@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axiosInstance from "../axiosInstance";
 
 const AuthContext = createContext(null);
 
@@ -39,28 +40,28 @@ export function AuthProvider({ children }) {
     setStudySessionSeconds(0);
   }, [getStudySessionKey]);
 
+  // On mount: check if an existing token in localStorage is still valid
   useEffect(() => {
     if (didCheckAuth.current) return;
     didCheckAuth.current = true;
 
     const checkAuth = async () => {
       try {
-        const res = await fetch("/auth/check-auth", {
-          credentials: "include",
-        });
-        const data = await res.json();
-
-        if (res.ok && data.authenticated) {
-          setUser(data.payload);
-          startStudySession(data.payload);
-        } else {
+        const token = localStorage.getItem("token");
+        if (!token) {
           setUser(null);
           endStudySession(null);
+          setLoading(false);
+          return;
         }
+
+        // axiosInstance interceptor automatically attaches the Bearer token
+        const res = await axiosInstance.get("/auth/check-auth");
+        setUser(res.data.payload);
+        startStudySession(res.data.payload);
       } catch (err) {
-        if (!import.meta.env.DEV) {
-          console.error("Auth check failed:", err);
-        }
+        // Clear bad/expired token
+        localStorage.removeItem("token");
         setUser(null);
         endStudySession(null);
       } finally {
@@ -71,6 +72,7 @@ export function AuthProvider({ children }) {
     checkAuth();
   }, [endStudySession, startStudySession]);
 
+  // Study session ticker for STUDENT role
   useEffect(() => {
     if (!user || user.role !== "STUDENT" || !studySessionStartRef.current) return undefined;
 
@@ -81,7 +83,11 @@ export function AuthProvider({ children }) {
     return () => window.clearInterval(intervalId);
   }, [user]);
 
-  const login = (userData) => {
+  const login = (userData, token) => {
+    // Save token to localStorage so axiosInstance can attach it automatically
+    if (token) {
+      localStorage.setItem("token", token);
+    }
     setUser(userData);
     startStudySession(userData, { reset: true });
 
@@ -90,17 +96,20 @@ export function AuthProvider({ children }) {
     else if (userData.role === "ADMIN") navigate("/admin/dashboard");
   };
 
-  const updateUser = (userData) => {
+  const updateUser = (userData, token) => {
+    if (token) {
+      localStorage.setItem("token", token);
+    }
     setUser(userData);
   };
 
   const logout = async () => {
     const currentUser = user;
     try {
-      await fetch("/auth/logout", {
-        credentials: "include",
-      });
+      await axiosInstance.get("/auth/logout");
     } finally {
+      // Remove token from localStorage
+      localStorage.removeItem("token");
       endStudySession(currentUser);
       setUser(null);
       navigate("/login");

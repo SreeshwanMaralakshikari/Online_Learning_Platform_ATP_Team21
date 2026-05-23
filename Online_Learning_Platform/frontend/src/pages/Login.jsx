@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import axiosInstance from "../axiosInstance";
 
 export default function Login() {
   const { login } = useAuth();
@@ -19,22 +20,15 @@ export default function Login() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) setError(data.message || "Login failed");
-      else login(data.payload);
-    } catch {
-      setError("Unable to reach server. Check your connection.");
+      const res = await axiosInstance.post("/auth/login", form);
+      // Pass both user payload and token — AuthContext saves token to localStorage
+      login(res.data.payload, res.data.token);
+    } catch (err) {
+      setError(err.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <>
       <style>{`

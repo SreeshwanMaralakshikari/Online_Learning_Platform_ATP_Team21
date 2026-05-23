@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { getVideoEmbed } from "../../utils/media";
 
@@ -29,29 +31,20 @@ export default function CourseDetail() {
     const fetchData = async () => {
       try {
         const [coursesRes, enrollRes, wishlistRes] = await Promise.all([
-          fetch("/student-api/courses", { credentials: "include" }),
-          fetch("/student-api/course", { credentials: "include" }),
-          fetch("/student-api/wishlist", { credentials: "include" }),
+          axiosInstance.get("/student-api/courses"),
+          axiosInstance.get("/student-api/course"),
+          axiosInstance.get("/student-api/wishlist")
         ]);
 
-        const coursesData = await coursesRes.json();
-        const enrollData = await enrollRes.json();
-        const wishlistData = await wishlistRes.json();
-        if (!coursesRes.ok) throw new Error(coursesData.message || "Failed to load course");
-
-        const found = coursesData.payload?.find((item) => item._id === id);
+        const found = coursesRes.data.payload?.find((item) => item._id === id);
         if (!found) throw new Error("Course not found");
         setCourse(found);
 
-        if (enrollRes.ok) {
-          const myEnrollment = enrollData.payload?.find((item) => (item.course?._id ?? item.course) === id);
-          setEnrollment(myEnrollment ?? null);
-        }
-        if (wishlistRes.ok) {
-          setIsWishlisted((wishlistData.payload || []).some((item) => (item.course?._id ?? item.course) === id));
-        }
+        const myEnrollment = enrollRes.data.payload?.find((item) => (item.course?._id ?? item.course) === id);
+        setEnrollment(myEnrollment ?? null);
+        setIsWishlisted((wishlistRes.data.payload || []).some((item) => (item.course?._id ?? item.course) === id));
       } catch (err) {
-        setError(err.message || "Failed to load course");
+        setError(err.response?.data?.message || err.message || "Failed to load course");
       } finally {
         setLoading(false);
       }
@@ -76,14 +69,10 @@ export default function CourseDetail() {
     setActionError("");
 
     try {
-      const res = await fetch(isWishlisted ? `/student-api/wishlist/${id}` : "/student-api/wishlist", {
-        method: isWishlisted ? "DELETE" : "POST",
-        headers: isWishlisted ? undefined : { "Content-Type": "application/json" },
-        credentials: "include",
-        body: isWishlisted ? undefined : JSON.stringify({ courseId: id }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Unable to update wishlist");
+      await (isWishlisted
+        ? axiosInstance.delete(`/student-api/wishlist/${id}`)
+        : axiosInstance.post("/student-api/wishlist", { courseId: id }));
+      // axios throws on non-2xx automatically
       setIsWishlisted((current) => !current);
     } catch (err) {
       setActionError(err.message || "Unable to update wishlist");

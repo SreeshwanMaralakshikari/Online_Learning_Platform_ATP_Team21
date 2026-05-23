@@ -1,4 +1,6 @@
+
 import { useCallback, useEffect, useRef, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { getVideoEmbed } from "../../utils/media";
 
@@ -50,14 +52,8 @@ export default function CoursePlayer() {
     const safeProgress = Math.min(100, Math.max(0, Math.round(nextProgress)));
     const nextStatus = safeProgress >= 100 ? "Completed" : safeProgress > 0 ? "In Progress" : "Enrolled";
 
-    const res = await fetch("/student-api/course", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ courseId: id, status: nextStatus, progress: safeProgress }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || "Failed to update progress");
+    const res = await axiosInstance.patch("/student-api/course", { courseId: id, status: nextStatus, progress: safeProgress })
+    // axios throws on non-2xx automatically
   }, [id]);
 
   const saveProgress = useCallback(async (nextProgress) => {
@@ -74,43 +70,31 @@ export default function CoursePlayer() {
   const saveStudyTime = useCallback(async (minutes) => {
     if (!minutes || minutes < 1) return;
 
-    await fetch("/student-api/course", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ courseId: id, timeSpentMinutes: minutes }),
-    });
+    await axiosInstance.patch("/student-api/course", { courseId: id, timeSpentMinutes: minutes })
   }, [id]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [coursesRes, enrollRes, doubtsRes] = await Promise.all([
-          fetch("/student-api/courses", { credentials: "include" }),
-          fetch("/student-api/course", { credentials: "include" }),
-          fetch(`/student-api/doubts/feed?courseId=${id}`, { credentials: "include" }),
+          axiosInstance.get("/student-api/courses"),
+          axiosInstance.get("/student-api/course"),
+          axiosInstance.get(`/student-api/doubts/feed?courseId=${id}`)
         ]);
-        const coursesData = await coursesRes.json();
-        const enrollData = await enrollRes.json();
-        const doubtsData = await doubtsRes.json();
 
-        if (!coursesRes.ok) throw new Error(coursesData.message || "Failed to load course");
-
-        const found = coursesData.payload?.find((item) => item._id === id);
+        const found = coursesRes.data.payload?.find((item) => item._id === id);
         if (!found) throw new Error("Course not found");
         setCourse(found);
 
-        if (enrollRes.ok) {
-          const myEnroll = enrollData.payload?.find((item) => (item.course?._id ?? item.course) === id);
-          if (!myEnroll) {
-            navigate(`/student/courses/${id}`);
-            return;
-          }
-          setEnrollment(myEnroll);
+        const myEnroll = enrollRes.data.payload?.find((item) => (item.course?._id ?? item.course) === id);
+        if (!myEnroll) {
+          navigate(`/student/courses/${id}`);
+          return;
         }
-        if (doubtsRes.ok) setCourseDoubts(doubtsData.payload || []);
+        setEnrollment(myEnroll);
+        setCourseDoubts(doubtsRes.data.payload || []);
       } catch (err) {
-        setError(err.message || "Failed to load course");
+        setError(err.response?.data?.message || err.message || "Failed to load course");
       } finally {
         setLoading(false);
       }
@@ -149,7 +133,7 @@ export default function CoursePlayer() {
     if (nextProgress <= Number(enrollment.progress || 0)) return;
 
     sendProgress(nextProgress).catch((err) => {
-      setError(err.message || "Failed to update progress");
+      setError(err.response?.data?.message || err.message || "Failed to update progress");
     });
   }, [activeChapter, course, enrollment, sendProgress]);
 
@@ -160,7 +144,7 @@ export default function CoursePlayer() {
     try {
       await saveProgress(100);
     } catch (err) {
-      setError(err.message || "Failed to update progress");
+      setError(err.response?.data?.message || err.message || "Failed to update progress");
     } finally {
       setCompleting(false);
     }
@@ -203,18 +187,12 @@ export default function CoursePlayer() {
     setDoubtMessage("");
 
     try {
-      const res = await fetch("/student-api/doubts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ courseId: id, ...doubtForm }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to post doubt");
+      const res = await axiosInstance.post("/student-api/doubts", { courseId: id, ...doubtForm })
+      // axios throws on non-2xx automatically
 
-      setCourseDoubts((items) => [data.payload, ...items]);
+      setCourseDoubts((items) => [res.data.payload, ...items]);
       setDoubtForm({ topic: "", description: "" });
-      setDoubtMessage(data.message || "Doubt posted");
+      setDoubtMessage(res.data.message || "Doubt posted");
     } catch (err) {
       setDoubtMessage(err.message || "Failed to post doubt");
     } finally {
@@ -235,24 +213,18 @@ export default function CoursePlayer() {
     setInstructorDoubtMessage("");
 
     try {
-      const res = await fetch("/student-api/doubts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
+      const res = await axiosInstance.post("/student-api/doubts", {
           courseId: id,
           audience: "instructor",
           chapterTitle,
           unitTitle,
           topic: formValue.topic,
           description: formValue.description,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to send doubt to instructor");
+        })
+      // axios throws on non-2xx automatically
 
       setInstructorDoubtForms((current) => ({ ...current, [unitKey]: { topic: "", description: "" } }));
-      setInstructorDoubtMessage(data.message || "Doubt sent to instructor");
+      setInstructorDoubtMessage(res.data.message || "Doubt sent to instructor");
     } catch (err) {
       setInstructorDoubtMessage(err.message || "Failed to send doubt to instructor");
     } finally {
@@ -269,18 +241,12 @@ export default function CoursePlayer() {
     setDoubtMessage("");
 
     try {
-      const res = await fetch(`/student-api/doubts/${doubtId}/answers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ solution }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to post solution");
+      const res = await axiosInstance.post(`/student-api/doubts/${doubtId}/answers`, { solution })
+      // axios throws on non-2xx automatically
 
-      setCourseDoubts((items) => items.map((item) => (item._id === doubtId ? data.payload : item)));
+      setCourseDoubts((items) => items.map((item) => (item._id === doubtId ? res.data.payload : item)));
       setAnswerForms((current) => ({ ...current, [doubtId]: "" }));
-      setDoubtMessage(data.message || "Solution posted");
+      setDoubtMessage(res.data.message || "Solution posted");
     } catch (err) {
       setDoubtMessage(err.message || "Failed to post solution");
     } finally {

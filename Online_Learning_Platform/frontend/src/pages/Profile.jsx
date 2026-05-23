@@ -1,4 +1,6 @@
+
 import { useEffect, useMemo, useState } from "react";
+import axiosInstance from "../axiosInstance";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -86,15 +88,14 @@ export default function Profile() {
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const res = await fetch("/auth/profile", { credentials: "include" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to load profile");
+        const res = await axiosInstance.get("/auth/profile");
+        // axios throws on non-2xx automatically
 
-        setProfile(data.payload);
-        updateUser(data.payload);
-        setFormFromUser(data.payload);
+        setProfile(res.data.payload);
+        updateUser(res.data.payload, res.data.token);
+        setFormFromUser(res.data.payload);
       } catch (err) {
-        setError(err.message || "Failed to load profile");
+        setError(err.response?.data?.message || err.message || "Failed to load profile");
         if (user) setFormFromUser(user);
       } finally {
         setLoading(false);
@@ -110,10 +111,8 @@ export default function Profile() {
 
       try {
         if (profile.role === "STUDENT") {
-          const res = await fetch("/student-api/course", { credentials: "include" });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message);
-          const enrollments = data.payload || [];
+          const res = await axiosInstance.get("/student-api/course");
+                    const enrollments = res.data.payload || [];
           const completed = enrollments.filter((item) => item.status === "Completed" && item.course);
           setStats([
             { label: "Enrolled", value: enrollments.length },
@@ -123,10 +122,8 @@ export default function Profile() {
         }
 
         if (profile.role === "INSTRUCTOR") {
-          const res = await fetch("/instructor-api/courses", { credentials: "include" });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message);
-          const courses = data.payload || [];
+          const res = await axiosInstance.get("/instructor-api/courses");
+                    const courses = res.data.payload || [];
           setStats([
             { label: "Courses", value: courses.length },
             { label: "Active", value: courses.filter((course) => course.isCourseActive).length },
@@ -136,15 +133,11 @@ export default function Profile() {
 
         if (profile.role === "ADMIN") {
           const [usersRes, coursesRes] = await Promise.all([
-            fetch("/admin-api/users", { credentials: "include" }),
-            fetch("/admin-api/courses", { credentials: "include" }),
+            axiosInstance.get("/admin-api/users"),
+            axiosInstance.get("/admin-api/courses");
           ]);
-          const usersData = await usersRes.json();
-          const coursesData = await coursesRes.json();
-          if (!usersRes.ok) throw new Error(usersData.message);
-          if (!coursesRes.ok) throw new Error(coursesData.message);
-          const users = usersData.payload || [];
-          const courses = coursesData.payload || [];
+          const users = usersRes.data.payload || [];
+          const courses = coursesRes.data.payload || [];
           setStats([
             { label: "Users", value: users.length },
             { label: "Courses", value: courses.length },
@@ -201,22 +194,16 @@ export default function Profile() {
     setSuccess("");
 
     try {
-      const res = await fetch("/auth/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || "Failed to update profile");
+      const res = await axiosInstance.put("/auth/profile", form);
+      // axios throws on non-2xx automatically
 
-      setProfile(data.payload);
-      updateUser(data.payload);
-      setFormFromUser(data.payload);
+      setProfile(res.data.payload);
+      updateUser(res.data.payload, res.data.token);
+      setFormFromUser(res.data.payload);
       setEditing(false);
       setSuccess("Profile updated successfully.");
     } catch (err) {
-      setError(err.message || "Failed to update profile");
+      setError(err.response?.data?.message || err.message || "Failed to update profile");
     } finally {
       setSaving(false);
     }
@@ -235,20 +222,14 @@ export default function Profile() {
     }
 
     try {
-      const res = await fetch("/auth/password", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
+      const res = await axiosInstance.put("/auth/password", {
           currentPassword: passwordForm.currentPassword,
           newPassword: passwordForm.newPassword,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to change password");
+        });
+      // axios throws on non-2xx automatically
 
       setPasswordForm(emptyPasswordForm);
-      setPasswordSuccess(data.message || "Password changed successfully.");
+      setPasswordSuccess(res.data.message || "Password changed successfully.");
     } catch (err) {
       setPasswordError(err.message || "Failed to change password");
     } finally {

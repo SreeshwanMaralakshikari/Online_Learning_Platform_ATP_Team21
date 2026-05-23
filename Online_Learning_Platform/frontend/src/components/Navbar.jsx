@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../axiosInstance";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/theme";
@@ -47,12 +49,11 @@ export default function Navbar() {
     let ignore = false;
     const loadDoubtCount = async () => {
       try {
-        const res = await fetch("/instructor-api/doubts", { credentials: "include" });
-        const data = await res.json();
-        if (!res.ok || ignore) return;
+        const res = await axiosInstance.get("/instructor-api/doubts");
+        if (ignore) return;
 
         const lastSeen = Number(window.localStorage.getItem("instructor-doubts-last-seen") || 0);
-        const count = (data.payload || []).filter((doubt) => new Date(doubt.createdAt).getTime() > lastSeen).length;
+        const count = (res.data.payload || []).filter((doubt) => new Date(doubt.createdAt).getTime() > lastSeen).length;
         setNewDoubts(count);
       } catch {
         if (!ignore) setNewDoubts(0);

@@ -1,4 +1,6 @@
+
 import { useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { Link, useNavigate } from "react-router-dom";
 import { getVideoEmbed } from "../../utils/media";
 
@@ -167,16 +169,11 @@ export default function CreateCourse() {
       const payload = new FormData();
       payload.append("file", file);
 
-      const res = await fetch("/instructor-api/media", {
-        method: "POST",
-        credentials: "include",
-        body: payload,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || "Failed to upload media");
-      onUploaded(data.payload.url);
+      const res = await axiosInstance.post("/instructor-api/media")
+      // axios throws on non-2xx automatically
+      onUploaded(res.data.payload.url);
     } catch (err) {
-      setError(err.message || "Failed to upload media");
+      setError(err.response?.data?.message || err.message || "Failed to upload media");
     } finally {
       setUploading("");
     }
@@ -223,20 +220,14 @@ export default function CreateCourse() {
         })),
       }));
 
-      const res = await fetch("/instructor-api/course", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
+      const res = await axiosInstance.post("/instructor-api/course", {
           ...form,
           chapters: courseChapters,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error);
+        })
+      // axios throws on non-2xx automatically
       navigate("/instructor/dashboard");
     } catch (err) {
-      setError(err.message || "Failed to create course");
+      setError(err.response?.data?.message || err.message || "Failed to create course");
     } finally {
       setLoading(false);
     }

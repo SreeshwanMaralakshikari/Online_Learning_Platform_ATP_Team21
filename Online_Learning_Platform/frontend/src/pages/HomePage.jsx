@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import axiosInstance from "../axiosInstance";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -139,13 +140,9 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState("All");
 
   useEffect(() => {
-    fetch("/auth/courses", { credentials: "include" })
+    axiosInstance.get("/auth/courses")
       .then((res) => {
-        if (!res.ok) throw new Error("Could not load courses");
-        return res.json();
-      })
-      .then((data) => {
-        setCourses(data.payload || []);
+        setCourses(res.data.payload || []);
         setError("");
       })
       .catch(() => {

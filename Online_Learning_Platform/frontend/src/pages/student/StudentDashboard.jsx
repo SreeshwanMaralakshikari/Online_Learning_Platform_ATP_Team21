@@ -1,4 +1,6 @@
+
 import { useEffect, useMemo, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
@@ -169,12 +171,10 @@ export default function StudentDashboard() {
   useEffect(() => {
     const fetchEnrollments = async () => {
       try {
-        const courseRes = await fetch("/student-api/course", { credentials: "include" });
-        const courseData = await courseRes.json();
-        if (!courseRes.ok) throw new Error(courseData.message || "Failed to load courses");
-        setEnrollments((courseData.payload || []).filter((enrollment) => enrollment.course));
+        const courseRes = await axiosInstance.get("/student-api/course");
+        setEnrollments((courseRes.data.payload || []).filter((enrollment) => enrollment.course));
       } catch (err) {
-        setError(err.message || "Failed to load courses");
+        setError(err.response?.data?.message || err.message || "Failed to load courses");
       } finally {
         setLoading(false);
       }

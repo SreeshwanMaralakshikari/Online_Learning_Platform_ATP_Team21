@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getVideoEmbed } from "../../utils/media";
 
@@ -38,10 +40,8 @@ export default function EditCourse() {
   useEffect(() => {
     const fetchCourse = async () => {
       try {
-        const res = await fetch("/instructor-api/courses", { credentials: "include" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message);
-        const found = data.payload.find((course) => course._id === id);
+        const res = await axiosInstance.get("/instructor-api/courses");
+                const found = res.data.payload.find((course) => course._id === id);
         if (!found) throw new Error("Course not found");
         setForm({
           title: found.title,
@@ -51,7 +51,7 @@ export default function EditCourse() {
         });
         setIsCourseActive(found.isCourseActive);
       } catch (err) {
-        setError(err.message || "Failed to load course");
+        setError(err.response?.data?.message || err.message || "Failed to load course");
       } finally {
         setLoading(false);
       }
@@ -76,16 +76,11 @@ export default function EditCourse() {
       const payload = new FormData();
       payload.append("file", file);
 
-      const res = await fetch("/instructor-api/media", {
-        method: "POST",
-        credentials: "include",
-        body: payload,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || "Failed to upload demo video");
-      setForm((prev) => ({ ...prev, demoVideo: data.payload.url }));
+      const res = await axiosInstance.post("/instructor-api/media");
+      // axios throws on non-2xx automatically
+      setForm((prev) => ({ ...prev, demoVideo: res.data.payload.url }));
     } catch (err) {
-      setError(err.message || "Failed to upload demo video");
+      setError(err.response?.data?.message || err.message || "Failed to upload demo video");
     } finally {
       setUploading(false);
     }
@@ -99,23 +94,16 @@ export default function EditCourse() {
     setError("");
     setSuccess("");
     try {
-      const res = await fetch("/instructor-api/course", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
+      const res = await axiosInstance.put("/instructor-api/course", {
           courseId: id,
           title: form.title,
           category: form.category,
           content: form.content,
           demoVideo: form.demoVideo,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      setSuccess("Course updated successfully.");
+        });
+            setSuccess("Course updated successfully.");
     } catch (err) {
-      setError(err.message || "Failed to update course");
+      setError(err.response?.data?.message || err.message || "Failed to update course");
     } finally {
       setSaving(false);
     }
@@ -128,18 +116,11 @@ export default function EditCourse() {
     const endpoint = newState ? "activate" : "deactivate";
 
     try {
-      const res = await fetch(`/instructor-api/courses/${endpoint}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ courseId: id, isCourseActive: newState }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      setIsCourseActive(newState);
+      const res = await axiosInstance.patch(`/instructor-api/courses/${endpoint}`, { courseId: id, isCourseActive: newState });
+            setIsCourseActive(newState);
       setSuccess(`Course ${newState ? "activated" : "deactivated"} successfully.`);
     } catch (err) {
-      setError(err.message || "Failed to update status");
+      setError(err.response?.data?.message || err.message || "Failed to update status");
     } finally {
       setToggling(false);
     }

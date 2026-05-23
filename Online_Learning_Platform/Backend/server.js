@@ -1,10 +1,7 @@
 import exp from 'express'
 import {config} from 'dotenv'
 import {connect} from 'mongoose'
-import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 import {studentApp} from "./APIs/StudentAPI.js";
 import {instructorApp} from "./APIs/InstructorAPI.js";
@@ -14,20 +11,25 @@ import {commonApp} from "./APIs/CommonAPI.js";
 config();
 
 const app=exp();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-//CORS middleware
+//CORS middleware — token-based auth, no cookies, so credentials:true is not needed
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
-  credentials: true
+  origin: (origin, callback) => {
+    const allowed = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      process.env.FRONTEND_URL,
+    ].filter(Boolean);
+    // Allow requests with no origin (curl, Postman, Render health checks)
+    if (!origin || allowed.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS blocked: ${origin}`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 //body parser middleware
 app.use(exp.json());
-//add cookie parser middleware
-app.use(cookieParser());
-app.use("/uploads", exp.static(path.join(__dirname, "uploads")));
 
 //health check route
 app.get("/", (req, res) => {
@@ -38,9 +40,9 @@ app.get("/", (req, res) => {
 });
 
 //path level middleware
-    //user
+    //student
     app.use("/student-api",studentApp);
-    //author
+    //instructor
     app.use("/instructor-api",instructorApp);
     //admin
     app.use("/admin-api",adminApp);
@@ -53,7 +55,7 @@ const connectDB=async()=>{
     {
         await connect(process.env.DB_URL);
         console.log("DB Server connected");
-        //asssign port
+        //assign port
         const port=process.env.PORT || 1935
         app.listen(port,()=>console.log(`server listening on ${port}...`));
     }

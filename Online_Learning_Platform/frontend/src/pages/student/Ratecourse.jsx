@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { useParams, useNavigate, Link } from "react-router-dom";
 
 const LABELS = ["", "Poor", "Fair", "Good", "Very good", "Excellent"];
@@ -21,16 +23,14 @@ export default function RateCourse() {
     const fetchData = async () => {
       try {
         const [coursesRes, enrollRes] = await Promise.all([
-          fetch("/student-api/courses", { credentials: "include" }),
-          fetch("/student-api/course", { credentials: "include" }),
+          axiosInstance.get("/student-api/courses"),
+          axiosInstance.get("/student-api/course")
         ]);
-        const coursesData = await coursesRes.json();
-        const enrollData = await enrollRes.json();
 
-        const found = coursesData.payload?.find((item) => item._id === courseId);
+        const found = coursesRes.data.payload?.find((item) => item._id === courseId);
         setCourse(found ?? null);
 
-        const myEnroll = enrollData.payload?.find((item) => (item.course?._id ?? item.course) === courseId);
+        const myEnroll = enrollRes.data.payload?.find((item) => (item.course?._id ?? item.course) === courseId);
         if (!myEnroll || myEnroll.status !== "Completed") {
           navigate(`/student/learn/${courseId}`);
         }
@@ -58,17 +58,11 @@ export default function RateCourse() {
     setError("");
 
     try {
-      const res = await fetch("/student-api/course", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ courseId, rating, comment }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to submit review");
+      const res = await axiosInstance.put("/student-api/course", { courseId, rating, comment })
+      // axios throws on non-2xx automatically
       setDone(true);
     } catch (err) {
-      setError(err.message || "Failed to submit review");
+      setError(err.response?.data?.message || err.message || "Failed to submit review");
     } finally {
       setSubmitting(false);
     }

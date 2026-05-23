@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { Link } from "react-router-dom";
 
 function formatDate(date) {
@@ -27,13 +29,12 @@ export default function CompletedCourses() {
   useEffect(() => {
     const loadCompletedCourses = async () => {
       try {
-        const res = await fetch("/student-api/course", { credentials: "include" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to load completed courses");
+        const res = await axiosInstance.get("/student-api/course");
+        // axios throws on non-2xx automatically
 
-        setCourses((data.payload || []).filter((item) => item.status === "Completed" && item.course));
+        setCourses((res.data.payload || []).filter((item) => item.status === "Completed" && item.course));
       } catch (err) {
-        setError(err.message || "Failed to load completed courses");
+        setError(err.response?.data?.message || err.message || "Failed to load completed courses");
       } finally {
         setLoading(false);
       }

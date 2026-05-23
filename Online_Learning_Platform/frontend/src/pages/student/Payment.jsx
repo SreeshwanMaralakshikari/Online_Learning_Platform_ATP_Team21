@@ -1,4 +1,6 @@
+
 import { useEffect, useMemo, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
@@ -41,22 +43,17 @@ export default function Payment() {
     const fetchCourse = async () => {
       try {
         const [coursesRes, enrollRes] = await Promise.all([
-          fetch("/student-api/courses", { credentials: "include" }),
-          fetch("/student-api/course", { credentials: "include" }),
+          axiosInstance.get("/student-api/courses"),
+          axiosInstance.get("/student-api/course")
         ]);
-        const data = await coursesRes.json();
-        const enrollData = await enrollRes.json();
-        if (!coursesRes.ok) throw new Error(data.message || "Unable to load course details");
 
-        const found = data.payload?.find((item) => item._id === courseId);
+        const found = coursesRes.data.payload?.find((item) => item._id === courseId);
         if (!found) throw new Error("Course not found");
 
         setCourse(found);
-        if (enrollRes.ok) {
-          setEnrollment((enrollData.payload || []).find((item) => (item.course?._id ?? item.course) === courseId) || null);
-        }
+        setEnrollment((enrollRes.data.payload || []).find((item) => (item.course?._id ?? item.course) === courseId) || null);
       } catch (err) {
-        setError(err.message || "Unable to load course details");
+        setError(err.response?.data?.message || err.message || "Unable to load course details");
       } finally {
         setLoading(false);
       }
@@ -92,46 +89,29 @@ export default function Payment() {
         return;
       }
 
-      const payRes = await fetch("/student-api/pay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          // Ensure these keys match your backend validation (e.g., 'student' vs 'studentId')
-          student: studentId, 
-          course: courseId,   
-          amount: paymentAmount,
-          method,
+      const payRes = await axiosInstance.post("/student-api/pay", {
+          student: studentId,
+          course: courseId,
+          method: method,
           transactionId: txnId,
           status: "SUCCESS",
-        }),
-      });
-
-      const payData = await payRes.json();
-      if (!payRes.ok) throw new Error(payData.message || "Payment failed");
+          amount: paymentAmount,
+        });
 
       if (enrollment) {
         navigate(isCertificatePurchase ? `/student/certificate/${courseId}` : `/student/learn/${courseId}`);
         return;
       }
 
-      const enrollRes = await fetch("/student-api/enroll", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
+      const enrollRes = await axiosInstance.post("/student-api/enroll", {
           student: studentId,
           course: courseId,
-          payment: payData.payload?._id,
-        }),
-      });
-
-      const enrollData = await enrollRes.json();
-      if (!enrollRes.ok) throw new Error(enrollData.message || "Enrollment failed");
+          payment: payRes.data.payload?._id,
+        });
 
       navigate(`/student/learn/${courseId}`);
     } catch (err) {
-      setError(err.message || "Something went wrong. Please try again.");
+      setError(err.response?.data?.message || err.message || "Something went wrong. Please try again.");
     } finally {
       setPaying(false);
     }

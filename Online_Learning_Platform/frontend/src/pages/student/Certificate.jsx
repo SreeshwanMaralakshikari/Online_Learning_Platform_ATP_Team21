@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
@@ -23,11 +25,10 @@ export default function Certificate() {
   useEffect(() => {
     const fetchCertificate = async () => {
       try {
-        const res = await fetch("/student-api/course", { credentials: "include" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to load certificate");
+        const res = await axiosInstance.get("/student-api/course");
+        // axios throws on non-2xx automatically
 
-        const found = (data.payload || []).find((item) => (item.course?._id ?? item.course) === courseId);
+        const found = (res.data.payload || []).find((item) => (item.course?._id ?? item.course) === courseId);
         if (!found) throw new Error("Course enrollment not found");
         if (found.status !== "Completed") {
           navigate(`/student/learn/${courseId}`);
@@ -39,7 +40,7 @@ export default function Certificate() {
         }
         setEnrollment(found);
       } catch (err) {
-        setError(err.message || "Failed to load certificate");
+        setError(err.response?.data?.message || err.message || "Failed to load certificate");
       } finally {
         setLoading(false);
       }
@@ -84,7 +85,7 @@ export default function Certificate() {
         certificateId,
       });
     } catch (err) {
-      setError(err.message || "Failed to download certificate");
+      setError(err.response?.data?.message || err.message || "Failed to download certificate");
     } finally {
       setDownloading(false);
     }

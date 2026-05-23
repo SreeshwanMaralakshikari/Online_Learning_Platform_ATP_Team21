@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import axiosInstance from "../../axiosInstance";
 import { Link } from "react-router-dom";
 
 export default function ManageCourses() {
@@ -33,24 +35,20 @@ export default function ManageCourses() {
   const fetchCourses = async () => {
     try {
       const [res, analyticsRes] = await Promise.all([
-        fetch("/admin-api/courses", { credentials: "include" }),
-        fetch("/admin-api/analytics", { credentials: "include" }),
+        axiosInstance.get("/admin-api/courses"),
+        axiosInstance.get("/admin-api/analytics")
       ]);
-      const data = await res.json();
-      const analyticsData = await analyticsRes.json();
-      if (!res.ok) throw new Error(data.message);
-      if (!analyticsRes.ok) throw new Error(analyticsData.message);
 
       const analyticsByCourse = {};
-      for (const item of analyticsData.payload?.courseEnrollmentCounts || []) {
+      for (const item of analyticsRes.data.payload?.courseEnrollmentCounts || []) {
         analyticsByCourse[item.courseId] = item;
       }
 
       setCourseAnalytics(analyticsByCourse);
-      setCourses(data.payload || []);
-      setFiltered(data.payload || []);
+      setCourses(res.data.payload || []);
+      setFiltered(res.data.payload || []);
     } catch (err) {
-      setError(err.message || "Failed to load courses");
+      setError(err.response?.data?.message || err.message || "Failed to load courses");
     } finally {
       setLoading(false);
     }
@@ -61,19 +59,12 @@ export default function ManageCourses() {
     const newState = !course.isCourseActive;
     const endpoint = newState ? "activate" : "deactivate";
     try {
-      const res = await fetch(`/admin-api/courses/${endpoint}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ courseId: course._id, isCourseActive: newState }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      setCourses((prev) =>
+      const res = await axiosInstance.patch(`/admin-api/courses/${endpoint}`, { courseId: course._id, isCourseActive: newState })
+            setCourses((prev) =>
         prev.map((c) => (c._id === course._id ? { ...c, isCourseActive: newState } : c))
       );
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message || "Failed to update course");
     } finally {
       setToggling(null);
     }

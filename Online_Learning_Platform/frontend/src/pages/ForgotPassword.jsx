@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import axiosInstance from "../axiosInstance";
 
 export default function ForgotPassword() {
   const [form, setForm] = useState({ email: "", newPassword: "", confirmPassword: "" });
@@ -27,21 +28,14 @@ export default function ForgotPassword() {
     }
 
     try {
-      const res = await fetch("/auth/forgot-password", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: form.email,
-          newPassword: form.newPassword,
-        }),
+      const res = await axiosInstance.put("/auth/forgot-password", {
+        email: form.email,
+        newPassword: form.newPassword,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to reset password");
-
-      setSuccess(data.message || "Password reset successfully.");
+      setSuccess(res.data.message || "Password reset successfully.");
       setForm({ email: "", newPassword: "", confirmPassword: "" });
     } catch (err) {
-      setError(err.message || "Failed to reset password");
+      setError(err.response?.data?.message || "Failed to reset password");
     } finally {
       setLoading(false);
     }

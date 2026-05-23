@@ -1,9 +1,4 @@
 import exp from 'express'
-import Busboy from '@fastify/busboy'
-import { createWriteStream } from 'fs'
-import { mkdir } from 'fs/promises'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import {CourseModel} from '../Models/CourseModel.js'
 import {UserModel} from '../Models/UserModel.js'
 import {DoubtModel} from '../Models/DoubtModel.js'
@@ -11,107 +6,34 @@ import {EnrollmentModel} from '../Models/EnrollmentModel.js'
 import { verifyToken } from '../Middlewares/verifyToken.js'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import { upload } from '../config/multer.js'
+import { uploadToCloudinary } from '../config/cloudinaryUpload.js'
+
 export const instructorApp=exp.Router()
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const uploadsDir = path.join(__dirname, '..', 'uploads')
-const allowedMediaTypes = new Set([
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/gif',
-    'video/mp4',
-    'video/webm',
-    'video/ogg',
-    'video/quicktime',
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'text/plain'
-])
-
-function safeFileName(fileName = 'media') {
-    const parsed = path.parse(fileName)
-    const name = parsed.name.replace(/[^a-z0-9-_]/gi, '-').slice(0, 60) || 'media'
-    const ext = parsed.ext.replace(/[^a-z0-9.]/gi, '').slice(0, 12)
-    return `${Date.now()}-${name}${ext}`
-}
-
-// Upload course images or videos to the local uploads folder and return a public /uploads path.
-instructorApp.post("/media", verifyToken("INSTRUCTOR"), async(req, res, next) => {
+// Upload course images or videos to Cloudinary and return a public URL.
+// Replaces the old local-disk Busboy approach — Render's filesystem is ephemeral,
+// so files saved locally are lost on every redeploy/restart.
+instructorApp.post("/media", verifyToken("INSTRUCTOR"), upload.single("file"), async(req, res, next) => {
     try {
-        if (!req.headers['content-type']?.includes('multipart/form-data')) {
-            return res.status(400).json({ message: "Upload a media file using multipart/form-data" })
+        if (!req.file) {
+            return res.status(400).json({ message: "No file uploaded. Send a 'file' field via multipart/form-data." })
         }
 
-        await mkdir(uploadsDir, { recursive: true })
+        const result = await uploadToCloudinary(
+            req.file.buffer,
+            req.file.mimetype,
+            req.file.originalname
+        )
 
-        const busboy = new Busboy({
-            headers: req.headers,
-            limits: { files: 1, fileSize: 200 * 1024 * 1024 }
-        })
-
-        let uploadedFile = null
-        let uploadError = null
-        let fileWritePromise = null
-
-        busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
-            if (fieldname !== 'file') {
-                file.resume()
-                return
-            }
-
-            if (!allowedMediaTypes.has(mimetype)) {
-                uploadError = new Error("Only image, video, PDF, document, and text files are allowed")
-                file.resume()
-                return
-            }
-
-            const storedName = safeFileName(filename)
-            const destination = path.join(uploadsDir, storedName)
-            const writeStream = createWriteStream(destination)
-
-            file.on('limit', () => {
-                uploadError = new Error("File is too large. Maximum size is 200MB")
-                file.unpipe(writeStream)
-                writeStream.destroy()
-            })
-
-            file.pipe(writeStream)
-            fileWritePromise = new Promise((resolve, reject) => {
-                writeStream.on('finish', () => {
-                    uploadedFile = {
-                        url: `/uploads/${storedName}`,
-                        name: filename,
-                        type: mimetype
-                    }
-                    resolve()
-                })
-                writeStream.on('error', reject)
-            })
-        })
-
-        busboy.on('finish', async() => {
-            try {
-                if (fileWritePromise) {
-                    await fileWritePromise
-                }
-                if (uploadError) {
-                    return res.status(400).json({ message: uploadError.message })
-                }
-                if (!uploadedFile) {
-                    return res.status(400).json({ message: "No file uploaded" })
-                }
-                res.status(201).json({ message: "Media uploaded", payload: uploadedFile })
-            } catch (err) {
-                next(err)
+        res.status(201).json({
+            message: "Media uploaded",
+            payload: {
+                url: result.secure_url,   // Full Cloudinary HTTPS URL — replaces /uploads/<filename>
+                name: req.file.originalname,
+                type: req.file.mimetype,
             }
         })
-
-        req.pipe(busboy)
     } catch (err) {
         next(err)
     }
