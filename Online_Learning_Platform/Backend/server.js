@@ -10,9 +10,9 @@ import {commonApp} from "./APIs/CommonAPI.js";
 
 config();
 
-const app=exp();
+const app = exp();
 
-//CORS middleware — token-based auth, no cookies, so credentials:true is not needed
+// CORS — dynamic origin, reads FRONTEND_URL from env
 app.use(cors({
   origin: (origin, callback) => {
     const allowed = [
@@ -28,65 +28,41 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-//body parser middleware
+// Body parser
 app.use(exp.json());
 
-//health check route
+// Health check
 app.get("/", (req, res) => {
   res.status(200).json({
-    message: "ATP Pro API is running",
+    message: "OLP API is running",
     routes: ["/auth", "/student-api", "/instructor-api", "/admin-api"],
   });
 });
 
-//path level middleware
-    //student
-    app.use("/student-api",studentApp);
-    //instructor
-    app.use("/instructor-api",instructorApp);
-    //admin
-    app.use("/admin-api",adminApp);
-    //for common operations
-    app.use("/auth",commonApp)
+// Path-level middleware
+app.use("/student-api", studentApp);
+app.use("/instructor-api", instructorApp);
+app.use("/admin-api", adminApp);
+app.use("/auth", commonApp);
 
-//connect to db
-const connectDB=async()=>{
-    try
-    {
-        await connect(process.env.DB_URL);
-        console.log("DB Server connected");
-        //assign port
-        const port=process.env.PORT || 1935
-        app.listen(port,()=>console.log(`server listening on ${port}...`));
-    }
-    catch(err)
-    {
-        console.log("err in db connect",err.message);
-    }
-};
+// 404 handler — after all routes
+app.use((req, res) => {
+  res.status(404).json({ message: `Path ${req.url} is Invalid` });
+});
 
-connectDB();
-
-//to handle invalid path
-app.use((req,res,next)=>{
-    console.log(req.url)
-    res.status(404).json({message:`Path ${req.url} is Invalid `});
-})
-
-//Error handling middleware
+// Global error handler — must be last
 app.use((err, req, res, next) => {
-  console.log("Error name:", err.name);
-  console.log("Error code:", err.code);
-  console.log("Error cause:", err.cause);
-  console.log("Full error:", JSON.stringify(err, null, 2));
-  //ValidationError
+  console.error("Error name:", err.name);
+  console.error("Error code:", err.code);
+  console.error("Full error:", JSON.stringify(err, null, 2));
+
   if (err.name === "ValidationError") {
     return res.status(400).json({ message: "error occurred", error: err.message });
   }
-  //CastError
   if (err.name === "CastError") {
     return res.status(400).json({ message: "error occurred", error: err.message });
   }
+
   const errCode = err.code ?? err.cause?.code ?? err.errorResponse?.code;
   const keyValue = err.keyValue ?? err.cause?.keyValue ?? err.errorResponse?.keyValue;
 
@@ -99,6 +75,20 @@ app.use((err, req, res, next) => {
     });
   }
 
-  //send server side error
   res.status(500).json({ message: "error occurred", error: "Server side error" });
 });
+
+// Connect to DB, then start server
+const connectDB = async () => {
+  try {
+    await connect(process.env.DB_URL);
+    console.log("DB Server connected");
+    const port = process.env.PORT || 1935;
+    app.listen(port, () => console.log(`Server listening on port ${port}...`));
+  } catch (err) {
+    console.error("Error connecting to DB:", err.message);
+    process.exit(1);
+  }
+};
+
+connectDB();
