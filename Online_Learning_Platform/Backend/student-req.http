@@ -1,0 +1,48 @@
+###Route for Viewing all Course
+GET http://localhost:3006/student-api/courses
+
+###Course Payment
+POST http://localhost:3006/student-api/pay
+Content-Type: application/json
+
+{
+    "student":"69f86f96e54643403f1917fe",
+    "course":"69f9b1f8e84a03e61e14ade9",
+    "amount":100,
+    "method":"CARD",
+    "status":"SUCCESS",
+    "transactionId":"e41ce21b783f7027a695cb2136dc9bfe7b78fd38f9a537c30911fb4897bc7d25"
+}
+
+###Course Enrollment
+POST http://localhost:3006/student-api/enroll
+Content-Type: application/json
+
+{
+    "student":"69f86f96e54643403f1917fe",
+    "course":"69f9b1f8e84a03e61e14ade9",
+    "payment":"69fac7de9ac61cbeb29e3d13"
+}
+
+###Route for viewing Student Enrolled Courses
+GET http://localhost:3006/student-api/course
+Content-Type: application/json
+
+###Route for Dropping a Course which Student has enrolled in
+PATCH http://localhost:3006/student-api/course
+Content-Type: application/json
+
+{
+    "courseId":"69f9b1f8e84a03e61e14ade9",
+    "status":"Dropped"
+}
+
+###Route for Adding Comments to a Course
+PUT http://localhost:3006/student-api/course
+Content-Type: application/json
+
+{
+    "courseId":"69f9b1d7e84a03e61e14ade8",
+    "rating":5,
+    "comment":"This Course is Very Instructive"
+}

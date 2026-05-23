@@ -1,0 +1,23 @@
+###Read All Users
+GET http://localhost:1935/admin-api/users
+
+###Read Enrollment Analytics
+GET http://localhost:1935/admin-api/analytics
+
+###For User Deactivation
+PATCH http://localhost:1935/admin-api/users/deactivate
+Content-Type: application/json
+
+{
+    "userId":"69f97318d17f3f50ff7e5717",
+    "isUserActive":false
+}
+
+###For User Activation
+PATCH http://localhost:1935/admin-api/users/activate
+Content-Type: application/json
+
+{
+    "userId":"69f97318d17f3f50ff7e5717",
+    "isUserActive":true
+}

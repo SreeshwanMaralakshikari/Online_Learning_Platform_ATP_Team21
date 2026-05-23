@@ -1,0 +1,42 @@
+#Route for Register(Student and Instructor)
+POST http://localhost:1935/auth/register
+Content-Type: application/json
+
+{
+    "firstName": "admin",
+    "lastName": "rollno2",
+    "email": "admin@gmail.com",
+    "password": "admin",
+    "role": "ADMIN",
+    "profileImageUrl": "#"
+}
+
+###Route for Login(Student, Instructor)
+POST http://localhost:1935/auth/login
+Content-Type: application/json
+
+{
+    "email": "admin@gmail.com",
+    "password": "admin"
+}
+
+###Route for Logout(Student, Instructor and Admin)
+GET http://localhost:1935/auth/logout
+
+###Route for changing Password
+PUT http://localhost:1935/auth/password
+Content-Type: application/json
+
+{
+    "currentPassword":"admin",
+    "newPassword":"admin1"
+}
+
+###Route for forgot password
+PUT http://localhost:1935/auth/forgot-password
+Content-Type: application/json
+
+{
+    "email":"admin@gmail.com",
+    "newPassword":"admin123"
+}
