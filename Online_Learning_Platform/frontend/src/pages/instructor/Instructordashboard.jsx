@@ -37,10 +37,16 @@ export default function InstructorDashboard() {
     fetchDashboard();
   }, []);
 
+  // FIX: Was calling /instructor-api/courses/activate and /instructor-api/courses/deactivate
+  // which do NOT exist on the backend. The backend only exposes the combined route
+  // /instructor-api/courses/toggle-status. Updated both handlers to use that route.
   const handleActivate = async (course) => {
     setToggling(course._id);
     try {
-      const res = await axiosInstance.patch("/instructor-api/courses/activate", { courseId: course._id, isCourseActive: true });
+      await axiosInstance.patch("/instructor-api/courses/toggle-status", {
+        courseId: course._id,
+        isCourseActive: true,
+      });
       setCourses((prev) =>
         prev.map((c) => (c._id === course._id ? { ...c, isCourseActive: true } : c))
       );
@@ -55,7 +61,10 @@ export default function InstructorDashboard() {
     setToggling(course._id);
     setConfirmDelete(null);
     try {
-      const res = await axiosInstance.patch("/instructor-api/courses/deactivate", { courseId: course._id, isCourseActive: false });
+      await axiosInstance.patch("/instructor-api/courses/toggle-status", {
+        courseId: course._id,
+        isCourseActive: false,
+      });
       setCourses((prev) =>
         prev.map((c) => (c._id === course._id ? { ...c, isCourseActive: false } : c))
       );

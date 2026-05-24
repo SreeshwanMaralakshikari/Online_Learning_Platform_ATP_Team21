@@ -24,18 +24,31 @@ export default function BrowseCourses() {
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [wishlistIds, setWishlistIds] = useState(() => new Set());
+  // FIX: Track enrolled course IDs so we hide "Save for later" for already-enrolled courses.
+  // Previously, clicking "Save for later" on an enrolled course triggered a backend 400
+  // "You are already enrolled" error that was shown as a confusing action error to the user.
+  const [enrolledIds, setEnrolledIds] = useState(() => new Set());
   const [savingId, setSavingId] = useState("");
 
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        const [res, wishlistRes] = await Promise.all([
+        const [res, wishlistRes, enrollRes] = await Promise.all([
           axiosInstance.get("/student-api/courses"),
-          axiosInstance.get("/student-api/wishlist")
+          axiosInstance.get("/student-api/wishlist"),
+          axiosInstance.get("/student-api/course"),
         ]);
         setCourses(res.data.payload || []);
         setFiltered(res.data.payload || []);
         setWishlistIds(new Set((wishlistRes.data.payload || []).map((item) => item.course?._id ?? item.course)));
+        // FIX: Build set of enrolled course IDs to prevent "already enrolled" wishlist errors
+        setEnrolledIds(
+          new Set(
+            (enrollRes.data.payload || [])
+              .filter((item) => item.status !== "Dropped" && item.course)
+              .map((item) => item.course?._id ?? item.course)
+          )
+        );
       } catch (err) {
         setError(err.response?.data?.message || err.message || "Failed to load courses");
       } finally {
@@ -74,10 +87,9 @@ export default function BrowseCourses() {
     setActionError("");
 
     try {
-      const res = await (isSaved
+      await (isSaved
         ? axiosInstance.delete(`/student-api/wishlist/${courseId}`)
         : axiosInstance.post("/student-api/wishlist", { courseId }));
-      // axios throws on non-2xx automatically
 
       setWishlistIds((current) => {
         const next = new Set(current);
@@ -86,7 +98,9 @@ export default function BrowseCourses() {
         return next;
       });
     } catch (err) {
-      setActionError(err.message || "Unable to update wishlist");
+      // FIX: Use the backend response message (e.g. "already enrolled") instead of the
+      // raw axios error message which is just "Request failed with status code 400"
+      setActionError(err.response?.data?.message || err.message || "Unable to update wishlist");
     } finally {
       setSavingId("");
     }
@@ -172,6 +186,8 @@ export default function BrowseCourses() {
                 key={course._id}
                 course={course}
                 isSaved={wishlistIds.has(course._id)}
+                // FIX: Pass isEnrolled so the card can hide the wishlist button for enrolled courses
+                isEnrolled={enrolledIds.has(course._id)}
                 isSaving={savingId === course._id}
                 onClick={() => navigate(`/student/courses/${course._id}`)}
                 onToggleWishlist={() => toggleWishlist(course._id)}
@@ -184,7 +200,7 @@ export default function BrowseCourses() {
   );
 }
 
-function CourseCard({ course, isSaved, isSaving, onClick, onToggleWishlist }) {
+function CourseCard({ course, isSaved, isEnrolled, isSaving, onClick, onToggleWishlist }) {
   const avgRating = course.reviews?.length
     ? (course.reviews.reduce((sum, review) => sum + review.rating, 0) / course.reviews.length).toFixed(1)
     : null;
@@ -213,6 +229,12 @@ function CourseCard({ course, isSaved, isSaving, onClick, onToggleWishlist }) {
             Demo class
           </span>
         )}
+        {/* FIX: Show "Enrolled" badge so users know they are already enrolled */}
+        {isEnrolled && (
+          <span className="mt-3 inline-flex w-fit rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
+            Enrolled
+          </span>
+        )}
 
         <button type="button" onClick={onClick} className="mt-3 text-left">
           <h3 className="line-clamp-2 text-base font-semibold leading-6 text-slate-950 group-hover:text-blue-700">
@@ -234,21 +256,26 @@ function CourseCard({ course, isSaved, isSaving, onClick, onToggleWishlist }) {
           onClick={onClick}
           className="mt-3 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white transition hover:bg-blue-700"
         >
-          View course
+          {isEnrolled ? "Continue learning" : "View course"}
         </button>
 
-        <button
-          type="button"
-          onClick={onToggleWishlist}
-          disabled={isSaving}
-          className={`mt-3 rounded-lg border px-3 py-2 text-sm font-bold transition-colors disabled:opacity-60 ${
-            isSaved
-              ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
-              : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
-          }`}
-        >
-          {isSaving ? "Saving..." : isSaved ? "Saved" : "Save for later"}
-        </button>
+        {/* FIX: Only show "Save for later" if student is NOT already enrolled.
+            The backend rejects wishlist saves for enrolled courses with a 400 error,
+            which previously showed as a confusing error message. */}
+        {!isEnrolled && (
+          <button
+            type="button"
+            onClick={onToggleWishlist}
+            disabled={isSaving}
+            className={`mt-3 rounded-lg border px-3 py-2 text-sm font-bold transition-colors disabled:opacity-60 ${
+              isSaved
+                ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
+            }`}
+          >
+            {isSaving ? "Saving..." : isSaved ? "Saved" : "Save for later"}
+          </button>
+        )}
       </div>
     </article>
   );

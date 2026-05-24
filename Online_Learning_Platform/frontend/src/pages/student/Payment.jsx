@@ -81,34 +81,26 @@ export default function Payment() {
       const paymentAmount = isCertificatePurchase ? 1 : Number(course?.price || 0);
       const txnId = generateTxnId();
 
-      // Final verification before sending
       if (!studentId || !courseId || paymentAmount < 0) {
         setError("Payment details are incomplete. Please ensure you are logged in and try again.");
         setPaying(false);
         return;
       }
 
-      const payRes = await axiosInstance.post("/student-api/pay", {
-          student: studentId,
-          course: courseId,
-          method: method,
-          transactionId: txnId,
-          status: "SUCCESS",
-          amount: paymentAmount,
-        });
+      // FIX: /student-api/pay now handles BOTH payment AND enrollment creation in one step.
+      // Do NOT call /student-api/enroll afterwards — it would trigger "already enrolled" error
+      // because /pay already creates the enrollment document in the database.
+      await axiosInstance.post("/student-api/pay", {
+        student: studentId,
+        course: courseId,
+        method: method,
+        transactionId: txnId,
+        status: "SUCCESS",
+        amount: paymentAmount,
+      });
 
-      if (enrollment) {
-        navigate(isCertificatePurchase ? `/student/certificate/${courseId}` : `/student/learn/${courseId}`);
-        return;
-      }
-
-      const enrollRes = await axiosInstance.post("/student-api/enroll", {
-          student: studentId,
-          course: courseId,
-          payment: payRes.data.payload?._id,
-        });
-
-      navigate(`/student/learn/${courseId}`);
+      // Navigate directly after payment succeeds — enrollment already created by /pay
+      navigate(isCertificatePurchase ? `/student/certificate/${courseId}` : `/student/learn/${courseId}`);
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Something went wrong. Please try again.");
     } finally {
@@ -191,13 +183,7 @@ export default function Payment() {
                   </span>
                   {method === item.value && (
                     <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-blue-700 text-white">
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 12 12"
-                        fill="none"
-                        aria-hidden="true"
-                      >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                         <path
                           d="M2.5 6.25L5 8.75L9.5 3.75"
                           stroke="currentColor"
