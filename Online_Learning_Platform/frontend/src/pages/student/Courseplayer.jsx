@@ -76,21 +76,25 @@ export default function CoursePlayer() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [coursesRes, enrollRes, doubtsRes] = await Promise.all([
-          axiosInstance.get("/student-api/courses"),
+        const [enrollRes, doubtsRes] = await Promise.all([
           axiosInstance.get("/student-api/course"),
           axiosInstance.get(`/student-api/doubts/feed?courseId=${id}`)
         ]);
-
-        const found = coursesRes.data.payload?.find((item) => item._id === id);
-        if (!found) throw new Error("Course not found");
-        setCourse(found);
 
         const myEnroll = enrollRes.data.payload?.find((item) => (item.course?._id ?? item.course) === id);
         if (!myEnroll) {
           navigate(`/student/courses/${id}`);
           return;
         }
+
+        // Use the course data populated inside the enrollment instead of a separate fetch.
+        // This avoids "Course not found" errors when the two requests return inconsistent data.
+        if (!myEnroll.course || typeof myEnroll.course !== "object") {
+          navigate(`/student/courses/${id}`);
+          return;
+        }
+
+        setCourse(myEnroll.course);
         setEnrollment(myEnroll);
         setCourseDoubts(doubtsRes.data.payload || []);
       } catch (err) {

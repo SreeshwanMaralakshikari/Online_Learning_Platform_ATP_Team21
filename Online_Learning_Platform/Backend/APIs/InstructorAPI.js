@@ -178,6 +178,51 @@ instructorApp.put("/course", verifyToken("INSTRUCTOR"), async (req, res, next) =
     }
 });
 
+// Update chapters for a course (replaces all chapters)
+instructorApp.patch("/course/chapters", verifyToken("INSTRUCTOR"), async (req, res, next) => {
+    try {
+        const instructorId = req.user?.id;
+        const { courseId, chapters } = req.body;
+
+        if (!courseId) {
+            return res.status(400).json({ message: "courseId is required" });
+        }
+
+        if (!Array.isArray(chapters)) {
+            return res.status(400).json({ message: "chapters must be an array" });
+        }
+
+        const course = await CourseModel.findOne({ _id: courseId, instructor: instructorId });
+        if (!course) {
+            return res.status(403).json({ message: "Course not found or you are not the instructor" });
+        }
+
+        // Sanitize chapters: strip internal Mongoose fields that would cause strict schema errors
+        const sanitizedChapters = chapters.map((ch) => ({
+            title: ch.title || "Untitled Chapter",
+            unitCount: Array.isArray(ch.units) ? ch.units.length : 0,
+            units: (ch.units || []).map((u) => ({
+                title: u.title || "Untitled Unit",
+                textContent: u.textContent || "",
+                videoContent: u.videoContent || "",
+                documentContent: u.documentContent || "",
+            })),
+            quiz: (ch.quiz || []).map((q) => ({
+                question: q.question || "",
+                options: Array.isArray(q.options) ? q.options : ["", "", "", ""],
+                answerIndex: Number(q.answerIndex) || 0,
+            })),
+        }));
+
+        course.chapters = sanitizedChapters;
+        await course.save();
+
+        res.status(200).json({ message: "Chapters updated", payload: course });
+    } catch (err) {
+        next(err);
+    }
+});
+
 // FIX: Merged the duplicate activate/deactivate routes into a single toggle route.
 // The old code had two separate routes (/courses/activate and /courses/deactivate) with
 // identical logic — both just set isCourseActive to whatever was passed in the body,

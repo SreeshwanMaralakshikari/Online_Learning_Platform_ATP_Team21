@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axiosInstance from "../axiosInstance";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -78,7 +78,7 @@ function getCategoryStyle(category) {
   return CATEGORY_STYLES[category] || CATEGORY_STYLES.Course;
 }
 
-function CourseCard({ course, onEnroll, isLoggedIn }) {
+function CourseCard({ course, onEnroll, isLoggedIn, isEnrolled }) {
   const style = getCategoryStyle(course.category);
   const courseImage = getCourseImage(course) || style.image;
 
@@ -94,6 +94,11 @@ function CourseCard({ course, onEnroll, isLoggedIn }) {
         <span className="absolute bottom-3 left-3 rounded bg-white px-2.5 py-1 text-xs font-bold text-slate-950 shadow-sm">
           {formatPrice(course.price)}
         </span>
+        {isEnrolled && (
+          <span className="absolute right-3 top-3 rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
+            Enrolled
+          </span>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col gap-3 p-4">
@@ -122,7 +127,7 @@ function CourseCard({ course, onEnroll, isLoggedIn }) {
             onClick={() => onEnroll(course)}
             className="rounded bg-slate-950 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-violet-700"
           >
-            {isLoggedIn ? "Enroll" : "Login"}
+            {!isLoggedIn ? "Login" : isEnrolled ? "Continue" : "Enroll"}
           </button>
         </div>
       </div>
@@ -134,20 +139,43 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [courses, setCourses] = useState([]);
+  const [enrolledIds, setEnrolledIds] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
 
   useEffect(() => {
-    axiosInstance.get("/auth/courses")
-      .then((res) => {
-        setCourses(res.data.payload || []);
+    const fetchData = async () => {
+      try {
+        const coursesRes = await axiosInstance.get("/auth/courses");
+        setCourses(coursesRes.data.payload || []);
         setError("");
-      })
-      .catch(() => {
+
+        // If user is a logged-in student, fetch their enrollments to know which
+        // courses they are already in so the Enroll button routes them correctly.
+        if (user?.role === "STUDENT") {
+          try {
+            const enrollRes = await axiosInstance.get("/student-api/course");
+            setEnrolledIds(
+              new Set(
+                (enrollRes.data.payload || [])
+                  .filter((item) => item.status !== "Dropped" && item.course)
+                  .map((item) => item.course?._id ?? item.course)
+              )
+            );
+          } catch {
+            // Non-fatal: enrollment fetch failure just means we fall back to payment flow
+          }
+        }
+      } catch {
         setError("Could not load courses. Please try again.");
-      })
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
       .finally(() => setLoading(false));
   }, []);
 
@@ -168,6 +196,12 @@ export default function HomePage() {
   function handleEnroll(course) {
     if (!user) {
       navigate("/login");
+      return;
+    }
+
+    // If the student is already enrolled, go straight to the course player
+    if (user.role === "STUDENT" && enrolledIds.has(course._id)) {
+      navigate(`/student/learn/${course._id}`);
       return;
     }
 
@@ -323,6 +357,7 @@ export default function HomePage() {
                     key={course._id}
                     course={course}
                     isLoggedIn={Boolean(user)}
+                    isEnrolled={enrolledIds.has(course._id)}
                     onEnroll={handleEnroll}
                   />
                 ))}

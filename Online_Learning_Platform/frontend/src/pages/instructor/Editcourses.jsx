@@ -19,6 +19,19 @@ const CATEGORIES = [
   "Other",
 ];
 
+const emptyUnit = (index = 0) => ({
+  title: `Unit ${index + 1}`,
+  textContent: "",
+  videoContent: "",
+  documentContent: "",
+});
+
+const emptyQuizQuestion = () => ({
+  question: "",
+  options: ["", "", "", ""],
+  answerIndex: 0,
+});
+
 export default function EditCourse() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -29,13 +42,16 @@ export default function EditCourse() {
     content: "",
     demoVideo: "",
   });
+  const [chapters, setChapters] = useState([]);
   const [isCourseActive, setIsCourseActive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [savingChapters, setSavingChapters] = useState(false);
+  const [uploading, setUploading] = useState("");
   const [toggling, setToggling] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [expandedChapters, setExpandedChapters] = useState([]);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -50,6 +66,13 @@ export default function EditCourse() {
           demoVideo: found.demoVideo || "",
         });
         setIsCourseActive(found.isCourseActive);
+        // Load chapters from the course — clone so we don't mutate the fetched object
+        const loadedChapters = (found.chapters || []).map((ch) => ({
+          ...ch,
+          units: (ch.units || []).map((u) => ({ ...u })),
+          quiz: (ch.quiz || []).map((q) => ({ ...q, options: [...(q.options || ["", "", "", ""])] })),
+        }));
+        setChapters(loadedChapters);
       } catch (err) {
         setError(err.response?.data?.message || err.message || "Failed to load course");
       } finally {
@@ -66,25 +89,135 @@ export default function EditCourse() {
     setSuccess("");
   };
 
-  const uploadMedia = async (file) => {
-    if (!file) return;
+  // ─── Chapter helpers ────────────────────────────────────────────────────────
 
-    setUploading(true);
+  const toggleChapter = (index) => {
+    setExpandedChapters((prev) =>
+      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
+    );
+  };
+
+  const addChapter = () => {
+    setChapters((prev) => [
+      ...prev,
+      { title: "", unitCount: 1, units: [emptyUnit()], quiz: [] },
+    ]);
+    setExpandedChapters((prev) => [...prev, chapters.length]);
+  };
+
+  const removeChapter = (chapterIndex) => {
+    setChapters((prev) => prev.filter((_, i) => i !== chapterIndex));
+    setExpandedChapters((prev) =>
+      prev.filter((i) => i !== chapterIndex).map((i) => (i > chapterIndex ? i - 1 : i))
+    );
+  };
+
+  const handleChapterChange = (chapterIndex, field, value) => {
+    setChapters((prev) =>
+      prev.map((ch, i) => (i === chapterIndex ? { ...ch, [field]: value } : ch))
+    );
+  };
+
+  // ─── Unit helpers ────────────────────────────────────────────────────────────
+
+  const addUnit = (chapterIndex) => {
+    setChapters((prev) =>
+      prev.map((ch, i) => {
+        if (i !== chapterIndex) return ch;
+        const units = [...(ch.units ?? []), emptyUnit(ch.units?.length ?? 0)];
+        return { ...ch, unitCount: units.length, units };
+      })
+    );
+  };
+
+  const removeUnit = (chapterIndex, unitIndex) => {
+    setChapters((prev) =>
+      prev.map((ch, i) => {
+        if (i !== chapterIndex) return ch;
+        const units = (ch.units ?? []).filter((_, ui) => ui !== unitIndex);
+        return { ...ch, unitCount: units.length, units };
+      })
+    );
+  };
+
+  const handleUnitChange = (chapterIndex, unitIndex, field, value) => {
+    setChapters((prev) =>
+      prev.map((ch, i) => {
+        if (i !== chapterIndex) return ch;
+        const units = [...(ch.units ?? [])];
+        units[unitIndex] = { ...(units[unitIndex] ?? emptyUnit(unitIndex)), [field]: value };
+        return { ...ch, units };
+      })
+    );
+  };
+
+  // ─── Quiz helpers ────────────────────────────────────────────────────────────
+
+  const addQuizQuestion = (chapterIndex) => {
+    setChapters((prev) =>
+      prev.map((ch, i) =>
+        i === chapterIndex
+          ? { ...ch, quiz: [...(ch.quiz ?? []), emptyQuizQuestion()] }
+          : ch
+      )
+    );
+  };
+
+  const removeQuizQuestion = (chapterIndex, qIndex) => {
+    setChapters((prev) =>
+      prev.map((ch, i) =>
+        i === chapterIndex
+          ? { ...ch, quiz: (ch.quiz ?? []).filter((_, qi) => qi !== qIndex) }
+          : ch
+      )
+    );
+  };
+
+  const handleQuizChange = (chapterIndex, qIndex, field, value) => {
+    setChapters((prev) =>
+      prev.map((ch, i) => {
+        if (i !== chapterIndex) return ch;
+        const quiz = [...(ch.quiz ?? [])];
+        quiz[qIndex] = { ...(quiz[qIndex] ?? emptyQuizQuestion()), [field]: value };
+        return { ...ch, quiz };
+      })
+    );
+  };
+
+  const handleQuizOptionChange = (chapterIndex, qIndex, optionIndex, value) => {
+    setChapters((prev) =>
+      prev.map((ch, i) => {
+        if (i !== chapterIndex) return ch;
+        const quiz = [...(ch.quiz ?? [])];
+        const question = { ...(quiz[qIndex] ?? emptyQuizQuestion()) };
+        const options = [...(question.options ?? ["", "", "", ""])];
+        options[optionIndex] = value;
+        quiz[qIndex] = { ...question, options };
+        return { ...ch, quiz };
+      })
+    );
+  };
+
+  // ─── Upload ──────────────────────────────────────────────────────────────────
+
+  const uploadMedia = async (file, onUploaded, label) => {
+    if (!file) return;
+    setUploading(label);
     setError("");
     setSuccess("");
     try {
       const payload = new FormData();
       payload.append("file", file);
-
       const res = await axiosInstance.post("/instructor-api/media", payload);
-      // axios throws on non-2xx automatically
-      setForm((prev) => ({ ...prev, demoVideo: res.data.payload.url }));
+      onUploaded(res.data.payload.url);
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Failed to upload demo video");
+      setError(err.response?.data?.message || err.message || "Failed to upload media");
     } finally {
-      setUploading(false);
+      setUploading("");
     }
   };
+
+  // ─── Save course info ────────────────────────────────────────────────────────
 
   const handleSave = async () => {
     if (!form.title.trim()) return setError("Title is required");
@@ -94,14 +227,14 @@ export default function EditCourse() {
     setError("");
     setSuccess("");
     try {
-      const res = await axiosInstance.put("/instructor-api/course", {
-          courseId: id,
-          title: form.title,
-          category: form.category,
-          content: form.content,
-          demoVideo: form.demoVideo,
-        });
-      setSuccess("Course updated successfully.");
+      await axiosInstance.put("/instructor-api/course", {
+        courseId: id,
+        title: form.title,
+        category: form.category,
+        content: form.content,
+        demoVideo: form.demoVideo,
+      });
+      setSuccess("Course details updated successfully.");
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Failed to update course");
     } finally {
@@ -109,14 +242,52 @@ export default function EditCourse() {
     }
   };
 
+  // ─── Save chapters ───────────────────────────────────────────────────────────
+
+  const handleSaveChapters = async () => {
+    // Validate chapters
+    if (chapters.some((ch) => !ch.title.trim())) {
+      return setError("All chapters must have a title");
+    }
+    if (chapters.some((ch) => (ch.units ?? []).some((u) => !u.title.trim()))) {
+      return setError("All units must have a title");
+    }
+    if (chapters.some((ch) => (ch.units ?? []).some((u) => !u.textContent.trim()))) {
+      return setError("All units must have content");
+    }
+    if (chapters.some((ch) => (ch.units ?? []).some((u) => u.textContent.trim().length < 10))) {
+      return setError("Each unit content must be at least 10 characters");
+    }
+
+    setSavingChapters(true);
+    setError("");
+    setSuccess("");
+    try {
+      await axiosInstance.patch("/instructor-api/course/chapters", {
+        courseId: id,
+        chapters,
+      });
+      setSuccess("Chapters saved successfully.");
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to save chapters");
+    } finally {
+      setSavingChapters(false);
+    }
+  };
+
+  // ─── Toggle active status ────────────────────────────────────────────────────
+
   const handleToggle = async () => {
     setToggling(true);
     setError("");
     const newState = !isCourseActive;
-    const endpoint = newState ? "activate" : "deactivate";
 
     try {
-      const res = await axiosInstance.patch(`/instructor-api/courses/${endpoint}`, { courseId: id, isCourseActive: newState });
+      // FIX: Use the correct unified toggle-status endpoint
+      await axiosInstance.patch("/instructor-api/courses/toggle-status", {
+        courseId: id,
+        isCourseActive: newState,
+      });
       setIsCourseActive(newState);
       setSuccess(`Course ${newState ? "activated" : "deactivated"} successfully.`);
     } catch (err) {
@@ -170,7 +341,13 @@ export default function EditCourse() {
           {isCourseActive ? "Currently active - visible to students" : "Currently inactive - hidden from students"}
         </div>
 
-        <div className="app-panel space-y-6 p-6">
+        {error && <div className="app-error mb-4">{error}</div>}
+        {success && <div className="app-success mb-4">{success}</div>}
+
+        {/* ── Course Info ─────────────────────────────────────────────── */}
+        <div className="app-panel space-y-6 p-6 mb-8">
+          <h2 className="text-base font-bold text-slate-950">Course Information</h2>
+
           <Field label="Course Title">
             <input type="text" name="title" value={form.title} onChange={handleChange} className={inputCls} />
           </Field>
@@ -211,27 +388,24 @@ export default function EditCourse() {
                 name="demoVideo"
                 value={form.demoVideo}
                 onChange={handleChange}
-                placeholder="Demo video URL or public local path"
+                placeholder="Demo video URL"
                 className={inputCls}
               />
               <input
                 type="file"
                 accept="video/*"
-                onChange={(event) => uploadMedia(event.target.files?.[0])}
+                onChange={(event) =>
+                  uploadMedia(event.target.files?.[0], (url) =>
+                    setForm((prev) => ({ ...prev, demoVideo: url })), "demo-video"
+                  )
+                }
                 className={fileCls}
               />
-              {uploading && <p className="text-[11px] font-semibold text-blue-700">Uploading demo video...</p>}
+              {uploading === "demo-video" && (
+                <p className="text-[11px] font-semibold text-blue-700">Uploading demo video...</p>
+              )}
             </div>
           </Field>
-
-          <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
-            <p className="text-xs leading-5 text-blue-800">
-              Tip: Chapter editing can be added later. For now, create a new course if the lesson structure needs major changes.
-            </p>
-          </div>
-
-          {error && <div className="app-error">{error}</div>}
-          {success && <div className="app-success">{success}</div>}
 
           <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <Link to="/instructor/dashboard" className="app-button-secondary flex-1">
@@ -244,10 +418,305 @@ export default function EditCourse() {
                   Saving...
                 </>
               ) : (
-                "Save Changes"
+                "Save Course Info"
               )}
             </button>
           </div>
+        </div>
+
+        {/* ── Chapter Editor ──────────────────────────────────────────── */}
+        <div className="app-panel p-6">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-slate-950">Chapters & Units</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Edit or add chapters, units, and quiz questions below.
+              </p>
+            </div>
+            <button type="button" onClick={addChapter} className="app-button-secondary text-sm px-4 py-2">
+              + Add Chapter
+            </button>
+          </div>
+
+          {chapters.length === 0 && (
+            <div className="rounded-lg border border-dashed border-slate-200 py-10 text-center text-sm text-slate-500">
+              No chapters yet. Click "Add Chapter" to start.
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {chapters.map((chapter, chapterIndex) => {
+              const isExpanded = expandedChapters.includes(chapterIndex);
+              return (
+                <div
+                  key={chapter._id ?? chapterIndex}
+                  className="overflow-hidden rounded-lg border border-slate-200"
+                >
+                  {/* Chapter header */}
+                  <div className="flex items-center gap-3 bg-slate-50 px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleChapter(chapterIndex)}
+                      className="flex flex-1 items-center gap-3 text-left"
+                    >
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-950 text-xs font-bold text-white">
+                        {chapterIndex + 1}
+                      </span>
+                      <span className="flex-1 text-sm font-bold text-slate-950">
+                        {chapter.title || `Chapter ${chapterIndex + 1}`}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-400">
+                        {isExpanded ? "▲ Collapse" : "▼ Expand"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeChapter(chapterIndex)}
+                      className="text-xs font-bold text-rose-600 hover:text-rose-800"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="space-y-5 p-4">
+                      <Field label="Chapter Title">
+                        <input
+                          type="text"
+                          value={chapter.title}
+                          onChange={(e) => handleChapterChange(chapterIndex, "title", e.target.value)}
+                          placeholder="Chapter title"
+                          className={inputCls}
+                        />
+                      </Field>
+
+                      {/* Units */}
+                      <div>
+                        <div className="mb-3 flex items-center justify-between">
+                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                            Units ({chapter.units?.length ?? 0})
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => addUnit(chapterIndex)}
+                            className="text-xs font-bold text-blue-700 hover:text-blue-900"
+                          >
+                            + Add Unit
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          {(chapter.units ?? []).map((unit, unitIndex) => (
+                            <div
+                              key={unit._id ?? unitIndex}
+                              className="rounded-lg border border-slate-200 bg-white p-4"
+                            >
+                              <div className="mb-3 flex items-center justify-between">
+                                <p className="text-xs font-bold text-slate-500">Unit {unitIndex + 1}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => removeUnit(chapterIndex, unitIndex)}
+                                  className="text-xs font-bold text-rose-500 hover:text-rose-700"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+
+                              <div className="space-y-3">
+                                <Field label="Unit Title">
+                                  <input
+                                    type="text"
+                                    value={unit.title}
+                                    onChange={(e) =>
+                                      handleUnitChange(chapterIndex, unitIndex, "title", e.target.value)
+                                    }
+                                    className={inputCls}
+                                  />
+                                </Field>
+
+                                <Field label="Unit Content">
+                                  <textarea
+                                    rows={4}
+                                    value={unit.textContent}
+                                    onChange={(e) =>
+                                      handleUnitChange(chapterIndex, unitIndex, "textContent", e.target.value)
+                                    }
+                                    placeholder="Explain the unit topic..."
+                                    className={`${inputCls} resize-none`}
+                                  />
+                                </Field>
+
+                                <Field label="Video URL (optional)">
+                                  <input
+                                    type="url"
+                                    value={unit.videoContent}
+                                    onChange={(e) =>
+                                      handleUnitChange(chapterIndex, unitIndex, "videoContent", e.target.value)
+                                    }
+                                    placeholder="YouTube / Vimeo / direct URL"
+                                    className={inputCls}
+                                  />
+                                  <input
+                                    type="file"
+                                    accept="video/*"
+                                    onChange={(e) =>
+                                      uploadMedia(
+                                        e.target.files?.[0],
+                                        (url) => handleUnitChange(chapterIndex, unitIndex, "videoContent", url),
+                                        `unit-${chapterIndex}-${unitIndex}-video`
+                                      )
+                                    }
+                                    className={`${fileCls} mt-2`}
+                                  />
+                                  {uploading === `unit-${chapterIndex}-${unitIndex}-video` && (
+                                    <p className="text-[11px] font-semibold text-blue-700">Uploading video...</p>
+                                  )}
+                                </Field>
+
+                                <Field label="Document URL (optional)">
+                                  <input
+                                    type="url"
+                                    value={unit.documentContent}
+                                    onChange={(e) =>
+                                      handleUnitChange(chapterIndex, unitIndex, "documentContent", e.target.value)
+                                    }
+                                    placeholder="Publicly accessible document URL"
+                                    className={inputCls}
+                                  />
+                                  <input
+                                    type="file"
+                                    accept=".pdf,.doc,.docx,.ppt,.pptx"
+                                    onChange={(e) =>
+                                      uploadMedia(
+                                        e.target.files?.[0],
+                                        (url) => handleUnitChange(chapterIndex, unitIndex, "documentContent", url),
+                                        `unit-${chapterIndex}-${unitIndex}-doc`
+                                      )
+                                    }
+                                    className={`${fileCls} mt-2`}
+                                  />
+                                  {uploading === `unit-${chapterIndex}-${unitIndex}-doc` && (
+                                    <p className="text-[11px] font-semibold text-blue-700">Uploading document...</p>
+                                  )}
+                                </Field>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Quiz */}
+                      <div>
+                        <div className="mb-3 flex items-center justify-between">
+                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                            Quiz Questions ({chapter.quiz?.length ?? 0})
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => addQuizQuestion(chapterIndex)}
+                            className="text-xs font-bold text-emerald-700 hover:text-emerald-900"
+                          >
+                            + Add Question
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          {(chapter.quiz ?? []).map((question, qIndex) => (
+                            <div
+                              key={question._id ?? qIndex}
+                              className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-4"
+                            >
+                              <div className="mb-3 flex items-center justify-between">
+                                <p className="text-xs font-bold text-emerald-700">
+                                  Question {qIndex + 1}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => removeQuizQuestion(chapterIndex, qIndex)}
+                                  className="text-xs font-bold text-rose-500 hover:text-rose-700"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+
+                              <div className="space-y-3">
+                                <Field label="Question">
+                                  <input
+                                    type="text"
+                                    value={question.question}
+                                    onChange={(e) =>
+                                      handleQuizChange(chapterIndex, qIndex, "question", e.target.value)
+                                    }
+                                    placeholder="Enter question..."
+                                    className={inputCls}
+                                  />
+                                </Field>
+
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {(question.options ?? ["", "", "", ""]).map((option, optionIndex) => (
+                                    <div key={optionIndex} className="flex items-center gap-2">
+                                      <input
+                                        type="radio"
+                                        name={`correct-${chapterIndex}-${qIndex}`}
+                                        checked={Number(question.answerIndex) === optionIndex}
+                                        onChange={() =>
+                                          handleQuizChange(chapterIndex, qIndex, "answerIndex", optionIndex)
+                                        }
+                                        className="accent-emerald-600"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={option}
+                                        onChange={(e) =>
+                                          handleQuizOptionChange(chapterIndex, qIndex, optionIndex, e.target.value)
+                                        }
+                                        placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                                        className={`${inputCls} flex-1`}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-[11px] text-slate-500">
+                                  Select the radio button next to the correct answer.
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {chapters.length > 0 && (
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={addChapter}
+                className="app-button-secondary flex-1"
+              >
+                + Add Another Chapter
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveChapters}
+                disabled={savingChapters}
+                className="app-button-primary flex-1"
+              >
+                {savingChapters ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Chapters"
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </section>
     </main>
@@ -299,4 +768,3 @@ const inputCls =
 
 const fileCls =
   "w-full cursor-pointer rounded-lg border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-blue-700 hover:border-blue-200";
-
