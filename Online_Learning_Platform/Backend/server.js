@@ -75,16 +75,24 @@ app.use((err, req, res, next) => {
     });
   }
 
+  // FIX: Handle multer file-type rejection (err.status set in multer.js fileFilter)
+  if (err.status === 400 && err.message) {
+    return res.status(400).json({ message: "error occurred", error: err.message });
+  }
+
   res.status(500).json({ message: "error occurred", error: "Server side error" });
 });
 
 // Connect to DB, then start server
+// FIX: Bind explicitly to '0.0.0.0' so Render's health-check port scanner can reach it
+// on all network interfaces (IPv4 and IPv6). Without this, on some Render instances
+// Node binds only to IPv6 '::' and the health check on IPv4 times out.
 const connectDB = async () => {
   try {
     await connect(process.env.DB_URL);
     console.log("DB Server connected");
     const port = process.env.PORT || 1935;
-    app.listen(port, () => console.log(`Server listening on port ${port}...`));
+    app.listen(port, '0.0.0.0', () => console.log(`Server listening on port ${port}...`));
   } catch (err) {
     console.error("Error connecting to DB:", err.message);
     process.exit(1);

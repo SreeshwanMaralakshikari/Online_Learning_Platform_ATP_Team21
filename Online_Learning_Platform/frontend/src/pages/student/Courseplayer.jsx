@@ -10,7 +10,7 @@ const hasCertificateAccess = (enrollment) => {
   const paymentAmount = typeof payment === "object" ? Number(payment?.amount || 0) : 0;
   const paymentStatus = typeof payment === "object" ? payment?.status : null;
 
-  return coursePrice > 0 || (paymentAmount > 0 && paymentStatus === "SUCCESS");
+  return paymentAmount > 0 && paymentStatus === "SUCCESS";
 };
 
 const getAssignmentTitle = (chapter, chapterIndex) => {
@@ -52,7 +52,7 @@ export default function CoursePlayer() {
     const safeProgress = Math.min(100, Math.max(0, Math.round(nextProgress)));
     const nextStatus = safeProgress >= 100 ? "Completed" : safeProgress > 0 ? "In Progress" : "Enrolled";
 
-    const res = await axiosInstance.patch("/student-api/course", { courseId: id, status: nextStatus, progress: safeProgress })
+    const res = await axiosInstance.patch("/student-api/course", { courseId: id, status: nextStatus, progress: safeProgress });
     // axios throws on non-2xx automatically
   }, [id]);
 
@@ -70,7 +70,7 @@ export default function CoursePlayer() {
   const saveStudyTime = useCallback(async (minutes) => {
     if (!minutes || minutes < 1) return;
 
-    await axiosInstance.patch("/student-api/course", { courseId: id, timeSpentMinutes: minutes })
+    await axiosInstance.patch("/student-api/course", { courseId: id, timeSpentMinutes: minutes });
   }, [id]);
 
   useEffect(() => {
@@ -187,7 +187,7 @@ export default function CoursePlayer() {
     setDoubtMessage("");
 
     try {
-      const res = await axiosInstance.post("/student-api/doubts", { courseId: id, ...doubtForm })
+      const res = await axiosInstance.post("/student-api/doubts", { courseId: id, ...doubtForm });
       // axios throws on non-2xx automatically
 
       setCourseDoubts((items) => [res.data.payload, ...items]);
@@ -220,7 +220,7 @@ export default function CoursePlayer() {
           unitTitle,
           topic: formValue.topic,
           description: formValue.description,
-        })
+        });
       // axios throws on non-2xx automatically
 
       setInstructorDoubtForms((current) => ({ ...current, [unitKey]: { topic: "", description: "" } }));
@@ -241,7 +241,7 @@ export default function CoursePlayer() {
     setDoubtMessage("");
 
     try {
-      const res = await axiosInstance.post(`/student-api/doubts/${doubtId}/answers`, { solution })
+      const res = await axiosInstance.post(`/student-api/doubts/${doubtId}/answers`, { solution });
       // axios throws on non-2xx automatically
 
       setCourseDoubts((items) => items.map((item) => (item._id === doubtId ? res.data.payload : item)));

@@ -83,7 +83,6 @@ export default function Payment() {
 
       // Final verification before sending
       if (!studentId || !courseId || paymentAmount < 0) {
-        console.error("Payment validation failed locally:", { studentId, courseId, paymentAmount });
         setError("Payment details are incomplete. Please ensure you are logged in and try again.");
         setPaying(false);
         return;

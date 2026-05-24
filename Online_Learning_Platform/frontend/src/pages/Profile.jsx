@@ -112,7 +112,7 @@ export default function Profile() {
       try {
         if (profile.role === "STUDENT") {
           const res = await axiosInstance.get("/student-api/course");
-                    const enrollments = res.data.payload || [];
+          const enrollments = res.data.payload || [];
           const completed = enrollments.filter((item) => item.status === "Completed" && item.course);
           setStats([
             { label: "Enrolled", value: enrollments.length },
@@ -123,7 +123,7 @@ export default function Profile() {
 
         if (profile.role === "INSTRUCTOR") {
           const res = await axiosInstance.get("/instructor-api/courses");
-                    const courses = res.data.payload || [];
+          const courses = res.data.payload || [];
           setStats([
             { label: "Courses", value: courses.length },
             { label: "Active", value: courses.filter((course) => course.isCourseActive).length },
@@ -134,7 +134,7 @@ export default function Profile() {
         if (profile.role === "ADMIN") {
           const [usersRes, coursesRes] = await Promise.all([
             axiosInstance.get("/admin-api/users"),
-            axiosInstance.get("/admin-api/courses");
+            axiosInstance.get("/admin-api/courses"),
           ]);
           const users = usersRes.data.payload || [];
           const courses = coursesRes.data.payload || [];

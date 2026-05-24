@@ -58,7 +58,7 @@ export default function RateCourse() {
     setError("");
 
     try {
-      const res = await axiosInstance.put("/student-api/course", { courseId, rating, comment })
+      const res = await axiosInstance.put("/student-api/course", { courseId, rating, comment });
       // axios throws on non-2xx automatically
       setDone(true);
     } catch (err) {

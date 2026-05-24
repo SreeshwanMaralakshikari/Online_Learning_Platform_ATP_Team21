@@ -7,84 +7,83 @@ import { PaymentModel } from '../Models/PaymentModel.js';
 import { WishlistModel } from '../Models/WishlistModel.js';
 import { DoubtModel } from '../Models/DoubtModel.js';
 
+export const studentApp = exp.Router();
 
-export const studentApp=exp.Router();
-
-const getKeywords=(text="")=>(
+const getKeywords = (text = "") => (
     text
         .toLowerCase()
-        .replace(/[^a-z0-9\s]/g," ")
+        .replace(/[^a-z0-9\s]/g, " ")
         .split(/\s+/)
-        .filter((word)=>word.length>3)
+        .filter((word) => word.length > 3)
 );
 
-const getSimilarity=(firstText,secondText)=>{
-    const firstKeywords=new Set(getKeywords(firstText));
-    const secondKeywords=new Set(getKeywords(secondText));
-    if(firstKeywords.size===0 || secondKeywords.size===0) return 0;
+const getSimilarity = (firstText, secondText) => {
+    const firstKeywords = new Set(getKeywords(firstText));
+    const secondKeywords = new Set(getKeywords(secondText));
+    if (firstKeywords.size === 0 || secondKeywords.size === 0) return 0;
 
-    let matches=0;
-    for(const keyword of firstKeywords) {
-        if(secondKeywords.has(keyword)) matches += 1;
+    let matches = 0;
+    for (const keyword of firstKeywords) {
+        if (secondKeywords.has(keyword)) matches += 1;
     }
 
-    return matches / Math.max(firstKeywords.size,secondKeywords.size);
+    return matches / Math.max(firstKeywords.size, secondKeywords.size);
 };
 
-//Protected Student Route to get All Courses
-studentApp.get("/courses",verifyToken("STUDENT"),async(req,res)=>{
-    //read all courses
-    const courseList=await CourseModel.find({isCourseActive: true});
-    //send res
-    res.status(200).json({message: "All Courses",payload: courseList})
-})
+// Protected Student Route to get All Courses
+studentApp.get("/courses", verifyToken("STUDENT"), async (req, res, next) => {
+    try {
+        const courseList = await CourseModel.find({ isCourseActive: true });
+        res.status(200).json({ message: "All Courses", payload: courseList });
+    } catch (err) {
+        next(err);
+    }
+});
 
-//Protected Student Route to pay for Course to Pay
-studentApp.post("/pay",verifyToken("STUDENT"),async(req,res)=>{
+// Protected Student Route to pay for a Course
+// FIX: After a successful payment, automatically creates an enrollment if one doesn't exist yet.
+studentApp.post("/pay", verifyToken("STUDENT"), async (req, res, next) => {
     try {
         const { course: courseId, method, transactionId, status = "SUCCESS", amount } = req.body;
-        const user=req.user;
+        const user = req.user;
 
-        const student=await UserModel.findOne({email: user.email});
-        if(!student){
-            return res.status(404).json({message:"Invalid student. Please sign in again."})
+        const student = await UserModel.findOne({ email: user.email });
+        if (!student) {
+            return res.status(404).json({ message: "Invalid student. Please sign in again." });
         }
 
-        if(student.role!="STUDENT"){
-            return res.status(403).json({message:"Only students can make payments"})
+        if (student.role !== "STUDENT") {
+            return res.status(403).json({ message: "Only students can make payments" });
         }
 
-        if(!courseId || !method || !transactionId)
-        {
-            return res.status(400).json({message:"Course, payment method, and transaction ID are required"})
+        if (!courseId || !method || !transactionId) {
+            return res.status(400).json({ message: "Course, payment method, and transaction ID are required" });
         }
 
-        if(status !== "SUCCESS")
-        {
-            return res.status(400).json({message:"Payment is not complete"})
+        if (status !== "SUCCESS") {
+            return res.status(400).json({ message: "Payment is not complete" });
         }
 
-        const course=await CourseModel.findOne({_id:courseId,isCourseActive:true});
-        if(!course){
-            return res.status(404).json({message:"Course not found"})
+        const course = await CourseModel.findOne({ _id: courseId, isCourseActive: true });
+        if (!course) {
+            return res.status(404).json({ message: "Course not found" });
         }
 
-        const existingEnrollment=await EnrollmentModel.findOne({
+        const existingEnrollment = await EnrollmentModel.findOne({
             student: student._id,
             course: course._id,
-            status: {$ne:"Dropped"}
+            status: { $ne: "Dropped" }
         });
-        if(existingEnrollment && Number(course.price || 0) > 0){
-            return res.status(400).json({message:"You are already enrolled in this course"})
+        if (existingEnrollment && Number(course.price || 0) > 0) {
+            return res.status(400).json({ message: "You are already enrolled in this course" });
         }
 
         const paymentAmount = Number(course.price || 0) > 0 ? Number(course.price || 0) : Number(amount || 0);
-        if(Number(course.price || 0) === 0 && paymentAmount < 0)
-        {
-            return res.status(400).json({message:"Payment amount cannot be negative"})
+        if (Number(course.price || 0) === 0 && paymentAmount < 0) {
+            return res.status(400).json({ message: "Payment amount cannot be negative" });
         }
 
-        const paymentObj={
+        const paymentObj = {
             student: student._id,
             course: course._id,
             amount: paymentAmount,
@@ -93,418 +92,435 @@ studentApp.post("/pay",verifyToken("STUDENT"),async(req,res)=>{
             status
         };
 
-        const newPaymentDoc=new PaymentModel(paymentObj)
-        await newPaymentDoc.save()
+        const newPaymentDoc = new PaymentModel(paymentObj);
+        await newPaymentDoc.save();
 
-        if(existingEnrollment && paymentAmount > 0){
+        if (existingEnrollment) {
+            // Student was previously dropped — update their payment record
             existingEnrollment.payment = newPaymentDoc._id;
+            existingEnrollment.status = "Enrolled";
             await existingEnrollment.save();
+        } else {
+            // FIX: New student — create the enrollment that the /enroll route would otherwise require
+            const newEnrollment = new EnrollmentModel({
+                student: student._id,
+                course: course._id,
+                payment: newPaymentDoc._id,
+            });
+            await newEnrollment.save();
+            // Remove from wishlist if present
+            await WishlistModel.findOneAndDelete({ student: student._id, course: course._id });
         }
 
-        res.status(201).json({message:"Payment completed successfully",payload:newPaymentDoc})
+        res.status(201).json({ message: "Payment completed and enrollment created successfully", payload: newPaymentDoc });
     } catch (err) {
         if (err.code === 11000) {
-            return res.status(400).json({message:"Duplicate transaction. Please try again."})
+            return res.status(400).json({ message: "Duplicate transaction. Please try again." });
         }
-        return res.status(400).json({message:err.message || "Payment failed"})
+        next(err);
     }
-})
+});
 
-//Protected Student Route to view saved courses
-studentApp.get("/wishlist",verifyToken("STUDENT"),async(req,res)=>{
-    const studentId=req.user?.id;
-
-    const wishlist=await WishlistModel.find({student:studentId})
-        .sort({createdAt:-1})
-        .populate({
-            path:"course",
-            match:{isCourseActive:true}
-        });
-
-    const activeWishlist=wishlist.filter((item)=>item.course);
-
-    res.status(200).json({message:"Saved courses",payload:activeWishlist})
-})
-
-//Protected Student Route to save a course for later
-studentApp.post("/wishlist",verifyToken("STUDENT"),async(req,res)=>{
+// Protected Student Route to view saved courses
+studentApp.get("/wishlist", verifyToken("STUDENT"), async (req, res, next) => {
     try {
-        const {courseId}=req.body;
-        const studentId=req.user?.id;
+        const studentId = req.user?.id;
 
-        if(!courseId)
-        {
-            return res.status(400).json({message:"Course ID is required"})
+        const wishlist = await WishlistModel.find({ student: studentId })
+            .sort({ createdAt: -1 })
+            .populate({
+                path: "course",
+                match: { isCourseActive: true }
+            });
+
+        const activeWishlist = wishlist.filter((item) => item.course);
+
+        res.status(200).json({ message: "Saved courses", payload: activeWishlist });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Protected Student Route to save a course for later
+studentApp.post("/wishlist", verifyToken("STUDENT"), async (req, res, next) => {
+    try {
+        const { courseId } = req.body;
+        const studentId = req.user?.id;
+
+        if (!courseId) {
+            return res.status(400).json({ message: "Course ID is required" });
         }
 
-        const course=await CourseModel.findOne({_id:courseId,isCourseActive:true});
-        if(!course)
-        {
-            return res.status(404).json({message:"Course not found"})
+        const course = await CourseModel.findOne({ _id: courseId, isCourseActive: true });
+        if (!course) {
+            return res.status(404).json({ message: "Course not found" });
         }
 
-        const enrollment=await EnrollmentModel.findOne({
-            student:studentId,
-            course:course._id,
-            status:{$ne:"Dropped"}
+        const enrollment = await EnrollmentModel.findOne({
+            student: studentId,
+            course: course._id,
+            status: { $ne: "Dropped" }
         });
-        if(enrollment)
-        {
-            return res.status(400).json({message:"You are already enrolled in this course"})
+        if (enrollment) {
+            return res.status(400).json({ message: "You are already enrolled in this course" });
         }
 
-        const wishlistDoc=await WishlistModel.findOneAndUpdate(
-            {student:studentId,course:course._id},
-            {$setOnInsert:{student:studentId,course:course._id}},
-            {new:true,upsert:true,setDefaultsOnInsert:true}
+        const wishlistDoc = await WishlistModel.findOneAndUpdate(
+            { student: studentId, course: course._id },
+            { $setOnInsert: { student: studentId, course: course._id } },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
         ).populate("course");
 
-        res.status(201).json({message:"Course saved for later",payload:wishlistDoc})
+        res.status(201).json({ message: "Course saved for later", payload: wishlistDoc });
     } catch (err) {
         if (err.code === 11000) {
-            return res.status(200).json({message:"Course already saved"})
+            return res.status(200).json({ message: "Course already saved" });
         }
-        return res.status(400).json({message:err.message || "Unable to save course"})
+        next(err);
     }
-})
+});
 
-//Protected Student Route to remove a saved course
-studentApp.delete("/wishlist/:courseId",verifyToken("STUDENT"),async(req,res)=>{
-    const studentId=req.user?.id;
-    const {courseId}=req.params;
-
-    await WishlistModel.findOneAndDelete({student:studentId,course:courseId});
-
-    res.status(200).json({message:"Course removed from wishlist"})
-})
-
-//Protected Student Route to view posted doubts and matched peers
-studentApp.get("/doubts",verifyToken("STUDENT"),async(req,res)=>{
-    const studentId=req.user?.id;
-
-    const doubts=await DoubtModel.find({student:studentId})
-        .sort({createdAt:-1})
-        .populate("course","title category")
-        .populate("matchedStudent","firstName lastName email")
-        .populate("repliedBy","firstName lastName email")
-        .populate("answers.student","firstName lastName")
-        .populate({
-            path:"matchedDoubt",
-            populate:{path:"student",select:"firstName lastName email"}
-        });
-
-    res.status(200).json({message:"Student doubts",payload:doubts})
-})
-
-//Protected Student Route to view course doubts from classmates in enrolled courses
-studentApp.get("/doubts/feed",verifyToken("STUDENT"),async(req,res)=>{
-    const studentId=req.user?.id;
-    const {courseId}=req.query;
-
-    const enrollmentQuery={
-        student:studentId,
-        status:{$ne:"Dropped"}
-    };
-    if(courseId) enrollmentQuery.course=courseId;
-
-    const enrollments=await EnrollmentModel.find(enrollmentQuery).select("course");
-    const courseIds=enrollments.map((enrollment)=>enrollment.course);
-
-    if(courseId && courseIds.length===0)
-    {
-        return res.status(403).json({message:"You can view doubts only for enrolled courses"})
-    }
-
-    const doubts=await DoubtModel.find({
-        course:{$in:courseIds},
-        audience:{$ne:"instructor"}
-    })
-        .sort({createdAt:-1})
-        .limit(30)
-        .populate("student","firstName lastName")
-        .populate("course","title category")
-        .populate("repliedBy","firstName lastName")
-        .populate("answers.student","firstName lastName");
-
-    res.status(200).json({message:"Course doubt feed",payload:doubts})
-})
-
-//Protected Student Route to post a doubt and find a similar solved/recent peer doubt
-studentApp.post("/doubts",verifyToken("STUDENT"),async(req,res)=>{
+// Protected Student Route to remove a saved course
+studentApp.delete("/wishlist/:courseId", verifyToken("STUDENT"), async (req, res, next) => {
     try {
-        const {courseId,topic,description,audience="class",chapterTitle,unitTitle}=req.body;
-        const studentId=req.user?.id;
+        const studentId = req.user?.id;
+        const { courseId } = req.params;
 
-        if(!topic || topic.trim()==="" || !description || description.trim()==="")
-        {
-            return res.status(400).json({message:"Topic and doubt description are required"})
-        }
+        await WishlistModel.findOneAndDelete({ student: studentId, course: courseId });
 
-        let course=null;
-        if(courseId)
-        {
-            course=await CourseModel.findOne({_id:courseId,isCourseActive:true});
-            if(!course)
-            {
-                return res.status(404).json({message:"Course not found"})
-            }
+        res.status(200).json({ message: "Course removed from wishlist" });
+    } catch (err) {
+        next(err);
+    }
+});
 
-            const enrollment=await EnrollmentModel.findOne({
-                student:studentId,
-                course:course._id,
-                status:{$ne:"Dropped"}
+// Protected Student Route to view posted doubts and matched peers
+studentApp.get("/doubts", verifyToken("STUDENT"), async (req, res, next) => {
+    try {
+        const studentId = req.user?.id;
+
+        const doubts = await DoubtModel.find({ student: studentId })
+            .sort({ createdAt: -1 })
+            .populate("course", "title category")
+            .populate("matchedStudent", "firstName lastName email")
+            .populate("repliedBy", "firstName lastName email")
+            .populate("answers.student", "firstName lastName")
+            .populate({
+                path: "matchedDoubt",
+                populate: { path: "student", select: "firstName lastName email" }
             });
-            if(!enrollment)
-            {
-                return res.status(403).json({message:"You can post doubts only for enrolled courses"})
+
+        res.status(200).json({ message: "Student doubts", payload: doubts });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Protected Student Route to view course doubts from classmates in enrolled courses
+studentApp.get("/doubts/feed", verifyToken("STUDENT"), async (req, res, next) => {
+    try {
+        const studentId = req.user?.id;
+        const { courseId } = req.query;
+
+        const enrollmentQuery = {
+            student: studentId,
+            status: { $ne: "Dropped" }
+        };
+        if (courseId) enrollmentQuery.course = courseId;
+
+        const enrollments = await EnrollmentModel.find(enrollmentQuery).select("course");
+        const courseIds = enrollments.map((enrollment) => enrollment.course);
+
+        if (courseId && courseIds.length === 0) {
+            return res.status(403).json({ message: "You can view doubts only for enrolled courses" });
+        }
+
+        const doubts = await DoubtModel.find({
+            course: { $in: courseIds },
+            audience: { $ne: "instructor" }
+        })
+            .sort({ createdAt: -1 })
+            .limit(30)
+            .populate("student", "firstName lastName")
+            .populate("course", "title category")
+            .populate("repliedBy", "firstName lastName")
+            .populate("answers.student", "firstName lastName");
+
+        res.status(200).json({ message: "Course doubt feed", payload: doubts });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Protected Student Route to post a doubt and find a similar solved/recent peer doubt
+studentApp.post("/doubts", verifyToken("STUDENT"), async (req, res, next) => {
+    try {
+        const { courseId, topic, description, audience = "class", chapterTitle, unitTitle } = req.body;
+        const studentId = req.user?.id;
+
+        if (!topic || topic.trim() === "" || !description || description.trim() === "") {
+            return res.status(400).json({ message: "Topic and doubt description are required" });
+        }
+
+        let course = null;
+        if (courseId) {
+            course = await CourseModel.findOne({ _id: courseId, isCourseActive: true });
+            if (!course) {
+                return res.status(404).json({ message: "Course not found" });
+            }
+
+            const enrollment = await EnrollmentModel.findOne({
+                student: studentId,
+                course: course._id,
+                status: { $ne: "Dropped" }
+            });
+            if (!enrollment) {
+                return res.status(403).json({ message: "You can post doubts only for enrolled courses" });
             }
         }
 
-        const normalizedAudience=audience==="instructor" ? "instructor" : "class";
+        const normalizedAudience = audience === "instructor" ? "instructor" : "class";
 
-        const recentCutoff=new Date(Date.now() - 1000 * 60 * 60 * 24 * 21);
-        const recentDoubts=await DoubtModel.find({
-            student:{$ne:studentId},
-            audience:{$ne:"instructor"},
-            createdAt:{$gte:recentCutoff},
-            ...(course ? {course:course._id} : {})
-        }).populate("student","firstName lastName email");
+        const recentCutoff = new Date(Date.now() - 1000 * 60 * 60 * 24 * 21);
+        const recentDoubts = await DoubtModel.find({
+            student: { $ne: studentId },
+            audience: { $ne: "instructor" },
+            createdAt: { $gte: recentCutoff },
+            ...(course ? { course: course._id } : {})
+        }).populate("student", "firstName lastName email");
 
-        const combinedText=`${topic} ${description}`;
-        const bestMatch=normalizedAudience==="class" ? recentDoubts
-            .map((doubt)=>({
+        const combinedText = `${topic} ${description}`;
+        const bestMatch = normalizedAudience === "class" ? recentDoubts
+            .map((doubt) => ({
                 doubt,
-                score:getSimilarity(combinedText,`${doubt.topic} ${doubt.description}`)
+                score: getSimilarity(combinedText, `${doubt.topic} ${doubt.description}`)
             }))
-            .filter((item)=>item.score>=0.25)
-            .sort((a,b)=>b.score-a.score)[0] : null;
+            .filter((item) => item.score >= 0.25)
+            .sort((a, b) => b.score - a.score)[0] : null;
 
-        const newDoubt=new DoubtModel({
-            student:studentId,
-            course:course?._id,
-            topic:topic.trim(),
-            description:description.trim(),
-            audience:normalizedAudience,
-            chapterTitle:chapterTitle?.trim(),
-            unitTitle:unitTitle?.trim(),
-            matchedDoubt:bestMatch?.doubt?._id,
-            matchedStudent:bestMatch?.doubt?.student?._id,
-            status:bestMatch ? "Matched" : "Open"
+        const newDoubt = new DoubtModel({
+            student: studentId,
+            course: course?._id,
+            topic: topic.trim(),
+            description: description.trim(),
+            audience: normalizedAudience,
+            chapterTitle: chapterTitle?.trim(),
+            unitTitle: unitTitle?.trim(),
+            matchedDoubt: bestMatch?.doubt?._id,
+            matchedStudent: bestMatch?.doubt?.student?._id,
+            status: bestMatch ? "Matched" : "Open"
         });
 
         await newDoubt.save();
 
-        const doubtWithMatch=await DoubtModel.findById(newDoubt._id)
-            .populate("course","title category")
-            .populate("matchedStudent","firstName lastName email")
-            .populate("repliedBy","firstName lastName email")
-            .populate("answers.student","firstName lastName")
+        const doubtWithMatch = await DoubtModel.findById(newDoubt._id)
+            .populate("course", "title category")
+            .populate("matchedStudent", "firstName lastName email")
+            .populate("repliedBy", "firstName lastName email")
+            .populate("answers.student", "firstName lastName")
             .populate({
-                path:"matchedDoubt",
-                populate:{path:"student",select:"firstName lastName email"}
+                path: "matchedDoubt",
+                populate: { path: "student", select: "firstName lastName email" }
             });
 
-        res.status(201).json({message:normalizedAudience==="instructor" ? "Doubt sent to instructor" : bestMatch ? "Similar learner found" : "Doubt posted",payload:doubtWithMatch})
-    } catch (err) {
-        return res.status(400).json({message:err.message || "Unable to post doubt"})
-    }
-})
-
-//Protected Student Route to answer a classmate's doubt in an enrolled course
-studentApp.post("/doubts/:doubtId/answers",verifyToken("STUDENT"),async(req,res)=>{
-    try {
-        const studentId=req.user?.id;
-        const {doubtId}=req.params;
-        const {solution}=req.body;
-
-        if(!solution || solution.trim()==="")
-        {
-            return res.status(400).json({message:"Solution cannot be empty"})
-        }
-
-        const doubt=await DoubtModel.findById(doubtId);
-        if(!doubt || !doubt.course)
-        {
-            return res.status(404).json({message:"Doubt not found"})
-        }
-
-        const enrollment=await EnrollmentModel.findOne({
-            student:studentId,
-            course:doubt.course,
-            status:{$ne:"Dropped"}
+        res.status(201).json({
+            message: normalizedAudience === "instructor" ? "Doubt sent to instructor" : bestMatch ? "Similar learner found" : "Doubt posted",
+            payload: doubtWithMatch
         });
-        if(!enrollment)
-        {
-            return res.status(403).json({message:"You can answer doubts only for enrolled courses"})
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Protected Student Route to answer a classmate's doubt in an enrolled course
+studentApp.post("/doubts/:doubtId/answers", verifyToken("STUDENT"), async (req, res, next) => {
+    try {
+        const studentId = req.user?.id;
+        const { doubtId } = req.params;
+        const { solution } = req.body;
+
+        if (!solution || solution.trim() === "") {
+            return res.status(400).json({ message: "Solution cannot be empty" });
+        }
+
+        const doubt = await DoubtModel.findById(doubtId);
+        if (!doubt || !doubt.course) {
+            return res.status(404).json({ message: "Doubt not found" });
+        }
+
+        const enrollment = await EnrollmentModel.findOne({
+            student: studentId,
+            course: doubt.course,
+            status: { $ne: "Dropped" }
+        });
+        if (!enrollment) {
+            return res.status(403).json({ message: "You can answer doubts only for enrolled courses" });
         }
 
         doubt.answers.push({
-            student:studentId,
-            solution:solution.trim()
+            student: studentId,
+            solution: solution.trim()
         });
-        doubt.status="Answered";
+        doubt.status = "Answered";
         await doubt.save();
 
-        const updatedDoubt=await DoubtModel.findById(doubt._id)
-            .populate("student","firstName lastName")
-            .populate("course","title category")
-            .populate("repliedBy","firstName lastName")
-            .populate("answers.student","firstName lastName");
+        const updatedDoubt = await DoubtModel.findById(doubt._id)
+            .populate("student", "firstName lastName")
+            .populate("course", "title category")
+            .populate("repliedBy", "firstName lastName")
+            .populate("answers.student", "firstName lastName");
 
-        res.status(201).json({message:"Solution posted",payload:updatedDoubt})
+        res.status(201).json({ message: "Solution posted", payload: updatedDoubt });
     } catch (err) {
-        return res.status(400).json({message:err.message || "Unable to post solution"})
+        next(err);
     }
-})
+});
 
-//Protected Student Route to Enroll in a Course
-studentApp.post("/enroll",verifyToken("STUDENT"),async(req,res)=>{
-    //get courseId from body
-    const enrollObj=req.body;
+// Protected Student Route to Enroll in a Course
+// FIX: Added try/catch, validates payment field (required by schema), proper error messages.
+studentApp.post("/enroll", verifyToken("STUDENT"), async (req, res, next) => {
+    try {
+        const enrollObj = req.body;
+        const user = req.user;
 
-    //req user
-    const user=req.user;
+        // FIX: payment is required in EnrollmentModel — validate before attempting save
+        if (!enrollObj.payment) {
+            return res.status(400).json({ message: "Payment ID is required to enroll" });
+        }
 
-    //check user
-    let student=await UserModel.findById(enrollObj.student);
+        // Verify the student exists and matches the logged-in user
+        const student = await UserModel.findById(enrollObj.student);
+        if (!student) {
+            return res.status(404).json({ message: "Invalid Student" });
+        }
 
-    //check if the student exist
-    if(!student)
-    {
-        return res.status(404).json({message:"Invalid Student"})
+        if (student.email !== user.email) {
+            return res.status(403).json({ message: "You are not authorized to enroll as another student" });
+        }
+
+        const course = await CourseModel.findOne({ _id: enrollObj.course, isCourseActive: true });
+        if (!course) {
+            return res.status(404).json({ message: "Course not found" });
+        }
+
+        // Check for existing active enrollment
+        const existingEnrollment = await EnrollmentModel.findOne({
+            student: student._id,
+            course: course._id,
+            status: { $ne: "Dropped" }
+        });
+        if (existingEnrollment) {
+            return res.status(400).json({ message: "You are already enrolled in this course" });
+        }
+
+        const enrollmentDoc = new EnrollmentModel({
+            ...enrollObj,
+            course: course._id
+        });
+
+        await enrollmentDoc.save();
+
+        // Remove from wishlist if present
+        await WishlistModel.findOneAndDelete({ student: student._id, course: course._id });
+
+        res.status(201).json({ message: "Enrollment Successful" });
+    } catch (err) {
+        next(err);
     }
+});
 
-    //check if it is the same student who has logged in and trying to enroll in course
-    if(student.email!=user.email)
-    {
-        return res.status(404).json({message:"You are not the authorized author"})
-    }
+// Protected Student Route to View All Courses which the student enrolled in
+// FIX: Added try/catch. Also filter out Dropped enrollments.
+studentApp.get("/course", verifyToken("STUDENT"), async (req, res, next) => {
+    try {
+        const studentId = req.user?.id;
 
-    const course=await CourseModel.findOne({_id:enrollObj.course,isCourseActive:true});
-    if(!course)
-    {
-        return res.status(404).json({message:"Course not found"})
-    }
-
-    //create enrollment document
-    const enrollmentDoc=new EnrollmentModel({
-        ...enrollObj,
-        course: course._id
-    });
-
-    //save the article document
-    await enrollmentDoc.save();
-
-    await WishlistModel.findOneAndDelete({student:student._id,course:course._id});
-
-    //send res to author
-    res.status(201).json({message:"Enrollment Successful"})
-})
-
-//Protected Student Route to View All Courses which he enrolled
-studentApp.get("/course",verifyToken("STUDENT"),async(req,res)=>{
-    //req user
-    const studentId=req.user?.id;
-
-    //read all active courses which the student enrolled in
-    const studentCourseList=await EnrollmentModel.find({student:studentId})
-        .populate({
-            path: "course",
-            match: { isCourseActive: true }
+        const studentCourseList = await EnrollmentModel.find({
+            student: studentId,
+            status: { $ne: "Dropped" }   // FIX: exclude dropped enrollments
         })
-        .populate("payment");
+            .populate({
+                path: "course",
+                match: { isCourseActive: true }
+            })
+            .populate("payment");
 
-    const activeStudentCourseList=studentCourseList.filter((enrollment)=>enrollment.course);
+        const activeStudentCourseList = studentCourseList.filter((enrollment) => enrollment.course);
 
-    //send res
-    res.status(200).json({message: "All Courses",payload: activeStudentCourseList})
-})
-
-//Protected Student Route to Drop a Course which he enrolled
-studentApp.patch("/course",verifyToken("STUDENT"),async(req,res)=>{
-    //req courseId and Status from req.body
-    const {courseId,status,progress,timeSpentMinutes}=req.body;
-    console.log(req.body);
-    //get user id from token
-    const studentId=req.user?.id;
-    console.log(studentId);
-
-    //get enrollment tuple from Enrollment DB
-    const enrollmentOfDb=await EnrollmentModel.findOne({student:studentId,course:courseId})
-
-    //check if enrollment data of student and course exist
-    if(!enrollmentOfDb)
-    {
-        //Return user not found
-        return res.status(403).json({message:"Enrollment details of Student with the Given Course not Found"})
+        res.status(200).json({ message: "All Courses", payload: activeStudentCourseList });
+    } catch (err) {
+        next(err);
     }
+});
 
-    const normalizedProgress = Number(progress);
-    const hasProgressUpdate = Number.isFinite(normalizedProgress);
-    const nextProgress = hasProgressUpdate ? Math.min(100, Math.max(0, Math.round(normalizedProgress))) : enrollmentOfDb.progress;
-    const nextStatus = status || (nextProgress >= 100 ? "Completed" : nextProgress > 0 ? "In Progress" : enrollmentOfDb.status);
-    const normalizedTimeSpent = Number(timeSpentMinutes);
-    const hasTimeUpdate = Number.isFinite(normalizedTimeSpent) && normalizedTimeSpent > 0;
+// Protected Student Route to update enrollment status/progress
+studentApp.patch("/course", verifyToken("STUDENT"), async (req, res, next) => {
+    try {
+        const { courseId, status, progress, timeSpentMinutes } = req.body;
+        const studentId = req.user?.id;
 
-    if(!["Enrolled","In Progress","Completed","Dropped"].includes(nextStatus))
-    {
-        return res.status(400).json({message:"Invalid enrollment status"})
+        const enrollmentOfDb = await EnrollmentModel.findOne({ student: studentId, course: courseId });
+
+        if (!enrollmentOfDb) {
+            return res.status(403).json({ message: "Enrollment details of Student with the Given Course not Found" });
+        }
+
+        const normalizedProgress = Number(progress);
+        const hasProgressUpdate = Number.isFinite(normalizedProgress);
+        const nextProgress = hasProgressUpdate
+            ? Math.min(100, Math.max(0, Math.round(normalizedProgress)))
+            : enrollmentOfDb.progress;
+        const nextStatus = status || (nextProgress >= 100 ? "Completed" : nextProgress > 0 ? "In Progress" : enrollmentOfDb.status);
+        const normalizedTimeSpent = Number(timeSpentMinutes);
+        const hasTimeUpdate = Number.isFinite(normalizedTimeSpent) && normalizedTimeSpent > 0;
+
+        if (!["Enrolled", "In Progress", "Completed", "Dropped"].includes(nextStatus)) {
+            return res.status(400).json({ message: "Invalid enrollment status" });
+        }
+
+        if (nextStatus === enrollmentOfDb.status && nextProgress === enrollmentOfDb.progress && !hasTimeUpdate) {
+            return res.status(200).json({ message: "Enrollment already in the same state" });
+        }
+
+        enrollmentOfDb.status = nextStatus;
+        enrollmentOfDb.progress = nextStatus === "Completed" ? 100 : nextProgress;
+        if (hasTimeUpdate) {
+            enrollmentOfDb.timeSpentMinutes = Number(enrollmentOfDb.timeSpentMinutes || 0) + Math.min(180, Math.max(1, Math.round(normalizedTimeSpent)));
+            enrollmentOfDb.lastStudiedAt = new Date();
+        }
+        await enrollmentOfDb.save();
+
+        res.status(200).json({ message: "Enrollment updated", payload: enrollmentOfDb });
+    } catch (err) {
+        next(err);
     }
+});
 
-    if(nextStatus===enrollmentOfDb.status && nextProgress===enrollmentOfDb.progress && !hasTimeUpdate)
-    {
-        return res.status(200).json({message:"Enrollment already in the same state"})
+// Protected Route to Add Review to Course
+studentApp.put("/course", verifyToken("STUDENT"), async (req, res, next) => {
+    try {
+        const { courseId, rating, comment } = req.body;
+
+        const courseDocument = await CourseModel.findOne({ _id: courseId, isCourseActive: true }).populate("reviews.student");
+
+        if (!courseDocument) {
+            return res.status(404).json({ message: "Course not Found" });
+        }
+
+        const studentIdOfToken = req.user?.id;
+
+        if (!comment || comment.trim() === "") {
+            return res.status(400).json({ message: "Comment cannot be Empty" });
+        }
+
+        courseDocument.reviews.push({ student: studentIdOfToken, rating: rating, comment: comment });
+
+        await courseDocument.save();
+
+        const updatedCourse = await CourseModel.findById(courseId).populate("reviews.student");
+
+        res.status(200).json({ message: "Comment Added Successfully", payload: updatedCourse });
+    } catch (err) {
+        next(err);
     }
-
-    //Update status and progress properties
-    enrollmentOfDb.status=nextStatus;
-    enrollmentOfDb.progress=nextStatus==="Completed" ? 100 : nextProgress;
-    if(hasTimeUpdate) {
-        enrollmentOfDb.timeSpentMinutes = Number(enrollmentOfDb.timeSpentMinutes || 0) + Math.min(180, Math.max(1, Math.round(normalizedTimeSpent)));
-        enrollmentOfDb.lastStudiedAt = new Date();
-    }
-    await enrollmentOfDb.save();
-    //send res
-    res.status(200).json({message: "Dropped Enrollment Details",payload: enrollmentOfDb})
-})
-
-//Protected Route to Add Review to Course
-studentApp.put("/course",verifyToken("STUDENT"),async(req,res)=>{
-    //get body from req
-    const {courseId,rating,comment}=req.body;
-
-    //check course
-    const courseDocument=await CourseModel.findOne({_id:courseId,isCourseActive:true}).populate("reviews.student");
-
-    //if course not Found
-    if(!courseDocument)
-    {
-        return res.status(404).json({message:"Course not Found"});
-    }
-
-    //get student id from token
-    const studentIdOfToken=req.user?.id;
-
-    //comment validation
-    if(!comment||comment.trim()==="")
-    {
-        return res.status(400).json({message:"Comment cannot be Empty"})
-    }
-
-    //add comment to comment arrays of course document
-    courseDocument.reviews.push({student:studentIdOfToken,rating: rating,comment:comment})
-
-    //save
-    await courseDocument.save();
-
-    //get updated course document
-    const updatedCourse=await CourseModel.findById(courseId).populate("reviews.student");
-
-    //send res
-    res.status(200).json({message:"Comment Added Successfully",payload:updatedCourse})
-})
-
-
-
-
-export default studentApp;
+});

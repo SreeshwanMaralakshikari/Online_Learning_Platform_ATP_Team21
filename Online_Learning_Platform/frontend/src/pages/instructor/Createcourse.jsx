@@ -169,7 +169,7 @@ export default function CreateCourse() {
       const payload = new FormData();
       payload.append("file", file);
 
-      const res = await axiosInstance.post("/instructor-api/media")
+      const res = await axiosInstance.post("/instructor-api/media", payload);
       // axios throws on non-2xx automatically
       onUploaded(res.data.payload.url);
     } catch (err) {
@@ -223,7 +223,7 @@ export default function CreateCourse() {
       const res = await axiosInstance.post("/instructor-api/course", {
           ...form,
           chapters: courseChapters,
-        })
+        });
       // axios throws on non-2xx automatically
       navigate("/instructor/dashboard");
     } catch (err) {

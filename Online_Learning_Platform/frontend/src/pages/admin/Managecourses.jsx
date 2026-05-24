@@ -59,8 +59,8 @@ export default function ManageCourses() {
     const newState = !course.isCourseActive;
     const endpoint = newState ? "activate" : "deactivate";
     try {
-      const res = await axiosInstance.patch(`/admin-api/courses/${endpoint}`, { courseId: course._id, isCourseActive: newState })
-            setCourses((prev) =>
+      const res = await axiosInstance.patch(`/admin-api/courses/${endpoint}`, { courseId: course._id, isCourseActive: newState });
+      setCourses((prev) =>
         prev.map((c) => (c._id === course._id ? { ...c, isCourseActive: newState } : c))
       );
     } catch (err) {

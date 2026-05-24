@@ -70,15 +70,15 @@ export default function Navbar() {
   }, [user?.role, location.pathname]);
 
   return (
-    <nav className="fixed left-0 right-0 top-0 z-50 border-b border-slate-200 bg-white">
+    <nav className="fixed left-0 right-0 top-0 z-50 border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-white shadow-lg">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-white shadow-lg dark:bg-white dark:text-slate-950">
             <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M2 12L6 4L10 9L12 6L14 12H2Z" fill="#ffffff" />
+              <path d="M2 12L6 4L10 9L12 6L14 12H2Z" fill="currentColor" />
             </svg>
           </div>
-          <span className="text-lg font-semibold tracking-tight text-slate-950">LearnHub</span>
+          <span className="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">LearnHub</span>
         </Link>
 
         {user && (
@@ -91,8 +91,8 @@ export default function Navbar() {
                   to={link.to}
                   className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
                     active
-                      ? "bg-slate-950 text-white"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                      ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
                   }`}
                 >
                   {link.label}
@@ -128,7 +128,7 @@ export default function Navbar() {
           </button>
           {user ? (
             <>
-              <span className="hidden text-sm font-semibold capitalize text-slate-700 sm:block">
+              <span className="hidden text-sm font-semibold capitalize text-slate-700 dark:text-slate-200 sm:block">
                 {displayName}
               </span>
               <button type="button" onClick={logout} className="app-button-secondary">

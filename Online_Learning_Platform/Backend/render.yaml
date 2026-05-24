@@ -2,19 +2,22 @@ services:
   - type: web
     name: olp-backend
     runtime: node
+    # rootDir: Backend   ← Uncomment this line ONLY if you push the parent folder
+    #                       that contains both Backend/ and frontend/.
+    #                       Leave commented if you push only the Backend folder itself.
     buildCommand: npm install
     startCommand: node server.js
+    healthCheckPath: /
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
+      # PORT is injected automatically by Render — do NOT hardcode it here.
       - key: DB_URL
-        sync: false          # set manually in Render dashboard
+        sync: false
       - key: SECRET_KEY
         sync: false
       - key: FRONTEND_URL
-        sync: false          # e.g. https://your-olp.vercel.app
+        sync: false
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY

@@ -24,9 +24,10 @@ const reviewSchema=new Schema({
 });
 
 const unitSchema=new Schema({
+    // FIX: Removed conflicting `required: true` — a field with a `default` is always
+    // present, making `required` misleading. Using `default` alone is correct here.
     title:{
         type: String,
-        required: [true,"Unit Title is Required"],
         default: "Untitled Unit"
     },
     textContent:{
@@ -73,9 +74,9 @@ const quizQuestionSchema=new Schema({
 });
 
 const chapterSchema=new Schema({
+    // FIX: Same fix as unitSchema — removed conflicting required+default on title.
     title:{
         type: String,
-        required: [true,"Chapter Title is Required"],
         default: "Untitled Chapter"
     },
     unitCount:{
@@ -83,15 +84,14 @@ const chapterSchema=new Schema({
         default: 1,
         min: [0,"Unit count cannot be negative"]
     },
-    units: [{type: unitSchema,default:[]}],
-    quiz: [{type: quizQuestionSchema,default:[]}]
+    units: [{type: unitSchema, default:[]}],
+    quiz: [{type: quizQuestionSchema, default:[]}]
 },
 {
     versionKey:false,
     timestamps:true,
     strict:"throw"
-})
-;
+});
 
 const courseSchema=new Schema({
     instructor:
@@ -122,8 +122,8 @@ const courseSchema=new Schema({
     demoVideo:{
         type: String
     },
-    chapters: [{type: chapterSchema,default:[]}],
-    reviews: [{type: reviewSchema,default:[]}],
+    chapters: [{type: chapterSchema, default:[]}],
+    reviews: [{type: reviewSchema, default:[]}],
 
     isCourseActive:{
         type: Boolean,
@@ -133,7 +133,6 @@ const courseSchema=new Schema({
     versionKey: false,
     timestamps: true,
     strict: "throw"
-})
+});
 
-//Create Course Model
 export const CourseModel=model("course",courseSchema);

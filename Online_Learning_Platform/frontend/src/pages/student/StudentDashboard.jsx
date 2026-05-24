@@ -17,7 +17,7 @@ const hasCertificateAccess = (enrollment) => {
   const paymentAmount = typeof payment === "object" ? Number(payment?.amount || 0) : 0;
   const paymentStatus = typeof payment === "object" ? payment?.status : null;
 
-  return coursePrice > 0 || (paymentAmount > 0 && paymentStatus === "SUCCESS");
+  return paymentAmount > 0 && paymentStatus === "SUCCESS";
 };
 
 const getEnrollmentProgress = (enrollment) => {

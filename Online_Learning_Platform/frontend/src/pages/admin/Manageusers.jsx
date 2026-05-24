@@ -40,7 +40,7 @@ export default function ManageUsers() {
   const fetchUsers = async () => {
     try {
       const res = await axiosInstance.get("/admin-api/users");
-            setUsers(res.data.payload || []);
+      setUsers(res.data.payload || []);
       setFiltered(res.data.payload || []);
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Failed to load users");
@@ -55,7 +55,7 @@ export default function ManageUsers() {
     const endpoint = newState ? "activate" : "deactivate";
     try {
       const res = await axiosInstance.patch(`/admin-api/users/${endpoint}`, { userId: user._id, isUserActive: newState });
-            setUsers((prev) =>
+      setUsers((prev) =>
         prev.map((u) => (u._id === user._id ? { ...u, isUserActive: newState } : u))
       );
     } catch (err) {

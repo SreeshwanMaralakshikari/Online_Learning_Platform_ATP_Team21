@@ -15,7 +15,6 @@ export const verifyToken = (...allowedRoles) => {
         }
         try {
             const decodedToken = jwt.verify(token, process.env.SECRET_KEY);
-            console.log(decodedToken);
 
             if (allowedRoles.length > 0 && !allowedRoles.includes(decodedToken.role)) {
                 return res.status(403).json({ message: "You are not authorized" });

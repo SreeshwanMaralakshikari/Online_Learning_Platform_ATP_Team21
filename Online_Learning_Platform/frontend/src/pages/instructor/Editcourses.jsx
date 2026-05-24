@@ -41,7 +41,7 @@ export default function EditCourse() {
     const fetchCourse = async () => {
       try {
         const res = await axiosInstance.get("/instructor-api/courses");
-                const found = res.data.payload.find((course) => course._id === id);
+        const found = res.data.payload.find((course) => course._id === id);
         if (!found) throw new Error("Course not found");
         setForm({
           title: found.title,
@@ -76,7 +76,7 @@ export default function EditCourse() {
       const payload = new FormData();
       payload.append("file", file);
 
-      const res = await axiosInstance.post("/instructor-api/media");
+      const res = await axiosInstance.post("/instructor-api/media", payload);
       // axios throws on non-2xx automatically
       setForm((prev) => ({ ...prev, demoVideo: res.data.payload.url }));
     } catch (err) {
@@ -101,7 +101,7 @@ export default function EditCourse() {
           content: form.content,
           demoVideo: form.demoVideo,
         });
-            setSuccess("Course updated successfully.");
+      setSuccess("Course updated successfully.");
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Failed to update course");
     } finally {
@@ -117,7 +117,7 @@ export default function EditCourse() {
 
     try {
       const res = await axiosInstance.patch(`/instructor-api/courses/${endpoint}`, { courseId: id, isCourseActive: newState });
-            setIsCourseActive(newState);
+      setIsCourseActive(newState);
       setSuccess(`Course ${newState ? "activated" : "deactivated"} successfully.`);
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Failed to update status");
@@ -231,7 +231,7 @@ export default function EditCourse() {
           </div>
 
           {error && <div className="app-error">{error}</div>}
-          {success && <div className="app-success">? {success}</div>}
+          {success && <div className="app-success">{success}</div>}
 
           <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <Link to="/instructor/dashboard" className="app-button-secondary flex-1">
