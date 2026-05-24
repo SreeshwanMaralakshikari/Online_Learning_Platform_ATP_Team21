@@ -7,27 +7,28 @@ export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
   build: {
     outDir: 'dist',
-    // Emit a small sourcemap in production for easier debugging on Vercel
     sourcemap: false,
     rollupOptions: {
       output: {
-        // Split vendor bundle for better caching
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          axios: ['axios'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-router-dom')) return 'router'
+            if (id.includes('axios')) return 'axios'
+            return 'vendor'
+          }
         },
       },
     },
   },
-  // Dev proxy — only used when running `vite` locally.
-  // In production (Vercel) all API calls go through VITE_API_URL instead.
-  server: mode === 'development' ? {
-    proxy: {
-      '/auth': 'http://localhost:1935',
-      '/student-api': 'http://localhost:1935',
-      '/instructor-api': 'http://localhost:1935',
-      '/admin-api': 'http://localhost:1935',
-      '/uploads': 'http://localhost:1935',
-    }
-  } : {}
+  server: mode === 'development'
+    ? {
+        proxy: {
+          '/auth': 'http://localhost:1935',
+          '/student-api': 'http://localhost:1935',
+          '/instructor-api': 'http://localhost:1935',
+          '/admin-api': 'http://localhost:1935',
+          '/uploads': 'http://localhost:1935',
+        },
+      }
+    : {},
 }))
