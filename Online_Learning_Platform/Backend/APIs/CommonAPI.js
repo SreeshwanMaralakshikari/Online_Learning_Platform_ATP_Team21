@@ -6,7 +6,7 @@ import { hash, compare } from "bcryptjs";
 import { verifyToken } from "../Middlewares/verifyToken.js";
 import jwt from 'jsonwebtoken';
 
-config();
+// dotenv config() is called once in server.js — no need to repeat it here.
 
 export const commonApp = exp.Router();
 
@@ -38,7 +38,6 @@ commonApp.post("/register", async (req, res, next) => {
     try {
         let allowedRoles = ["STUDENT", "INSTRUCTOR"];
         const newUser = req.body;
-        console.log(newUser);
 
         if (!allowedRoles.includes(newUser.role)) {
             return res.status(400).json({ message: "Invalid role" });
@@ -211,7 +210,14 @@ commonApp.put("/password", verifyToken("STUDENT", "INSTRUCTOR", "ADMIN"), async 
 });
 
 // Forgot Password
+// SECURITY WARNING: This endpoint resets any account with only an email address — no OTP or
+// verification token is required. It is intentionally disabled in production via the
+// ENABLE_FORGOT_PASSWORD environment variable. Set ENABLE_FORGOT_PASSWORD=true only in
+// development / demo environments, or after you have added a proper OTP/email-verification step.
 commonApp.put("/forgot-password", async (req, res) => {
+    if (process.env.ENABLE_FORGOT_PASSWORD !== "true") {
+        return res.status(403).json({ message: "Password reset is not available. Please contact support." });
+    }
     try {
         const { email, newPassword } = req.body;
 

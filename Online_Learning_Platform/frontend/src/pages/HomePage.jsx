@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axiosInstance from "../axiosInstance";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -176,7 +176,6 @@ export default function HomePage() {
     };
 
     fetchData();
-      .finally(() => setLoading(false));
   }, []);
 
   const filteredCourses = useMemo(() => {

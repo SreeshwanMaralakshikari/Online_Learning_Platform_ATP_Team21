@@ -58,8 +58,7 @@ export default function RateCourse() {
     setError("");
 
     try {
-      const res = await axiosInstance.put("/student-api/course", { courseId, rating, comment });
-      // axios throws on non-2xx automatically
+      await axiosInstance.put("/student-api/course", { courseId, rating, comment });
       setDone(true);
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Failed to submit review");

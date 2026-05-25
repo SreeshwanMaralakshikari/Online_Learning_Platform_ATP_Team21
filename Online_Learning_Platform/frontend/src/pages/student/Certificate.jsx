@@ -5,7 +5,6 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 const hasCertificateAccess = (enrollment) => {
-  const coursePrice = Number(enrollment?.course?.price || 0);
   const payment = enrollment?.payment;
   const paymentAmount = typeof payment === "object" ? Number(payment?.amount || 0) : 0;
   const paymentStatus = typeof payment === "object" ? payment?.status : null;

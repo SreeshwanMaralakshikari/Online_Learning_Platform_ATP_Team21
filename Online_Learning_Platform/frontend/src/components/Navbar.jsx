@@ -41,6 +41,7 @@ export default function Navbar() {
       return;
     }
 
+    // Clear badge when the instructor visits the doubts page
     if (location.pathname.startsWith("/instructor/doubts")) {
       setNewDoubts(0);
       return;
@@ -67,7 +68,8 @@ export default function Navbar() {
       ignore = true;
       window.clearInterval(intervalId);
     };
-  }, [user?.role, location.pathname]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role]);
 
   return (
     <nav className="fixed left-0 right-0 top-0 z-50 border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">

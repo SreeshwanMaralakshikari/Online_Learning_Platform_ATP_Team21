@@ -39,7 +39,9 @@ export default function EditCourse() {
   const [form, setForm] = useState({
     title: "",
     category: "",
+    price: 0,
     content: "",
+    thumbnail: "",
     demoVideo: "",
   });
   const [chapters, setChapters] = useState([]);
@@ -62,7 +64,9 @@ export default function EditCourse() {
         setForm({
           title: found.title,
           category: found.category,
+          price: Number(found.price || 0),
           content: found.content,
+          thumbnail: found.thumbnail || "",
           demoVideo: found.demoVideo || "",
         });
         setIsCourseActive(found.isCourseActive);
@@ -84,7 +88,8 @@ export default function EditCourse() {
   }, [id]);
 
   const handleChange = (event) => {
-    setForm((prev) => ({ ...prev, [event.target.name]: event.target.value }));
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: name === "price" ? Number(value) : value }));
     setError("");
     setSuccess("");
   };
@@ -231,7 +236,9 @@ export default function EditCourse() {
         courseId: id,
         title: form.title,
         category: form.category,
+        price: form.price,
         content: form.content,
+        thumbnail: form.thumbnail,
         demoVideo: form.demoVideo,
       });
       setSuccess("Course details updated successfully.");
@@ -252,11 +259,16 @@ export default function EditCourse() {
     if (chapters.some((ch) => (ch.units ?? []).some((u) => !u.title.trim()))) {
       return setError("All units must have a title");
     }
-    if (chapters.some((ch) => (ch.units ?? []).some((u) => !u.textContent.trim()))) {
-      return setError("All units must have content");
-    }
-    if (chapters.some((ch) => (ch.units ?? []).some((u) => u.textContent.trim().length < 10))) {
-      return setError("Each unit content must be at least 10 characters");
+    // A unit is valid if it has textContent (≥10 chars), OR a video, OR a document.
+    if (chapters.some((ch) =>
+      (ch.units ?? []).some((u) => {
+        const hasText = u.textContent.trim().length >= 10;
+        const hasVideo = u.videoContent.trim().length > 0;
+        const hasDoc = u.documentContent.trim().length > 0;
+        return !hasText && !hasVideo && !hasDoc;
+      })
+    )) {
+      return setError("Each unit must have at least one of: text content (≥10 characters), a video, or a document");
     }
 
     setSavingChapters(true);
@@ -360,6 +372,57 @@ export default function EditCourse() {
                 </option>
               ))}
             </select>
+          </Field>
+
+          <Field label="Price (Rs) - set 0 for Free">
+            <input
+              type="number"
+              name="price"
+              value={form.price}
+              onChange={handleChange}
+              min={0}
+              placeholder="0"
+              className={inputCls}
+            />
+          </Field>
+
+          <Field label="Course Image">
+            <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+              <div className="h-28 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                {form.thumbnail ? (
+                  <img src={form.thumbnail} alt="Course preview" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs font-semibold text-slate-400">
+                    Preview
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <input
+                  type="url"
+                  name="thumbnail"
+                  value={form.thumbnail}
+                  onChange={handleChange}
+                  placeholder="Image URL"
+                  className={inputCls}
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) =>
+                    uploadMedia(
+                      event.target.files?.[0],
+                      (url) => setForm((prev) => ({ ...prev, thumbnail: url })),
+                      "course-image"
+                    )
+                  }
+                  className={fileCls}
+                />
+                {uploading === "course-image" && (
+                  <p className="text-[11px] font-semibold text-blue-700">Uploading image...</p>
+                )}
+              </div>
+            </div>
           </Field>
 
           <Field label="Course Description">

@@ -54,7 +54,7 @@ export default function ManageUsers() {
     const newState = !user.isUserActive;
     const endpoint = newState ? "activate" : "deactivate";
     try {
-      const res = await axiosInstance.patch(`/admin-api/users/${endpoint}`, { userId: user._id, isUserActive: newState });
+      await axiosInstance.patch(`/admin-api/users/${endpoint}`, { userId: user._id, isUserActive: newState });
       setUsers((prev) =>
         prev.map((u) => (u._id === user._id ? { ...u, isUserActive: newState } : u))
       );

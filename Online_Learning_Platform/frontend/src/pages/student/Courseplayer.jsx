@@ -5,7 +5,6 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { getVideoEmbed } from "../../utils/media";
 
 const hasCertificateAccess = (enrollment) => {
-  const coursePrice = Number(enrollment?.course?.price || 0);
   const payment = enrollment?.payment;
   const paymentAmount = typeof payment === "object" ? Number(payment?.amount || 0) : 0;
   const paymentStatus = typeof payment === "object" ? payment?.status : null;
@@ -52,8 +51,7 @@ export default function CoursePlayer() {
     const safeProgress = Math.min(100, Math.max(0, Math.round(nextProgress)));
     const nextStatus = safeProgress >= 100 ? "Completed" : safeProgress > 0 ? "In Progress" : "Enrolled";
 
-    const res = await axiosInstance.patch("/student-api/course", { courseId: id, status: nextStatus, progress: safeProgress });
-    // axios throws on non-2xx automatically
+    await axiosInstance.patch("/student-api/course", { courseId: id, status: nextStatus, progress: safeProgress });
   }, [id]);
 
   const saveProgress = useCallback(async (nextProgress) => {

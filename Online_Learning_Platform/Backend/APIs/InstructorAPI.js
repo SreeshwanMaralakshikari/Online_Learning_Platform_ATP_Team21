@@ -76,7 +76,7 @@ instructorApp.get("/courses", verifyToken("INSTRUCTOR"), async (req, res, next) 
 instructorApp.get("/doubts", verifyToken("INSTRUCTOR"), async (req, res, next) => {
     try {
         const instructorId = req.user?.id;
-        const courses = await CourseModel.find({ instructor: instructorId }).select("_id title category");
+        const courses = await CourseModel.find({ instructor: instructorId }).select("_id");
         const courseIds = courses.map((course) => course._id);
 
         const enrollments = await EnrollmentModel.find({
@@ -156,11 +156,12 @@ instructorApp.patch("/doubts/:doubtId/reply", verifyToken("INSTRUCTOR"), async (
 instructorApp.put("/course", verifyToken("INSTRUCTOR"), async (req, res, next) => {
     try {
         const instructorIdofToken = req.user?.id;
-        const { courseId, title, category, content, thumbnail, demoVideo } = req.body;
+        const { courseId, title, category, content, thumbnail, demoVideo, price } = req.body;
 
         const updates = { title, category, content };
         if (thumbnail !== undefined) updates.thumbnail = thumbnail;
         if (demoVideo !== undefined) updates.demoVideo = demoVideo;
+        if (price !== undefined) updates.price = Number(price);
 
         const modifiedCourse = await CourseModel.findOneAndUpdate(
             { _id: courseId, instructor: instructorIdofToken },

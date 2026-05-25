@@ -1,7 +1,5 @@
 import jwt from 'jsonwebtoken'
-import { config } from 'dotenv';
-
-config();
+// dotenv config() is already called in server.js — not needed here.
 
 // Middleware to verify JWT token from Authorization header and check role
 export const verifyToken = (...allowedRoles) => {

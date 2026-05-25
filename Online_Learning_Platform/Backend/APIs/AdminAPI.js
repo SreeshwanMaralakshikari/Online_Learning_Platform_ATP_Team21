@@ -6,10 +6,17 @@ import { EnrollmentModel } from '../Models/EnrollmentModel.js';
 
 export const adminApp = exp.Router();
 
+// Helper: strip hashed password before sending user objects to the client
+function sanitizeUser(userDocument) {
+    const obj = userDocument.toObject ? userDocument.toObject() : { ...userDocument };
+    delete obj.password;
+    return obj;
+}
+
 // Protected Admin Route to get All Users
 adminApp.get("/users", verifyToken("ADMIN"), async (req, res, next) => {
     try {
-        const userList = await UserModel.find({ isUserActive: true });
+        const userList = await UserModel.find({ isUserActive: true }).select("-password");
         res.status(200).json({ message: "All Users", payload: userList });
     } catch (err) {
         next(err);
@@ -34,7 +41,7 @@ adminApp.patch("/users/deactivate", verifyToken("ADMIN"), async (req, res, next)
         userOfDb.isUserActive = isUserActive;
         await userOfDb.save();
 
-        res.status(200).json({ message: "User is Deactivated", payload: userOfDb });
+        res.status(200).json({ message: "User is Deactivated", payload: sanitizeUser(userOfDb) });
     } catch (err) {
         next(err);
     }
@@ -58,7 +65,7 @@ adminApp.patch("/users/activate", verifyToken("ADMIN"), async (req, res, next) =
         userOfDb.isUserActive = isUserActive;
         await userOfDb.save();
 
-        res.status(200).json({ message: "User is Activated", payload: userOfDb });
+        res.status(200).json({ message: "User is Activated", payload: sanitizeUser(userOfDb) });
     } catch (err) {
         next(err);
     }
@@ -75,7 +82,7 @@ adminApp.delete("/users/:userId", verifyToken("ADMIN"), async (req, res, next) =
             return res.status(404).json({ message: "User not Found" });
         }
 
-        res.status(200).json({ message: "User account has been soft-deleted", payload: userOfDb });
+        res.status(200).json({ message: "User account has been soft-deleted", payload: sanitizeUser(userOfDb) });
     } catch (err) {
         next(err);
     }

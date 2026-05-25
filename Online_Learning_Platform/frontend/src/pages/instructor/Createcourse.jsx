@@ -188,11 +188,16 @@ export default function CreateCourse() {
     if (chapters.some((chapter) => (chapter.units ?? []).some((unit) => !unit.title.trim()))) {
       return setError("All units must have a unit name");
     }
-    if (chapters.some((chapter) => (chapter.units ?? []).some((unit) => !unit.textContent.trim()))) {
-      return setError("All units must have unit content");
-    }
-    if (chapters.some((chapter) => (chapter.units ?? []).some((unit) => unit.textContent.trim().length < 10))) {
-      return setError("Each unit content must be at least 10 characters");
+    // A unit is valid if it has textContent (≥10 chars), OR a video, OR a document.
+    if (chapters.some((chapter) =>
+      (chapter.units ?? []).some((unit) => {
+        const hasText = unit.textContent.trim().length >= 10;
+        const hasVideo = unit.videoContent.trim().length > 0;
+        const hasDoc = unit.documentContent.trim().length > 0;
+        return !hasText && !hasVideo && !hasDoc;
+      })
+    )) {
+      return setError("Each unit must have at least one of: text content (≥10 characters), a video, or a document");
     }
     if (chapters.some((chapter) => (chapter.quiz ?? []).some((question) => !question.question.trim()))) {
       return setError("All quiz questions must have question text");
@@ -220,11 +225,10 @@ export default function CreateCourse() {
         })),
       }));
 
-      const res = await axiosInstance.post("/instructor-api/course", {
+      await axiosInstance.post("/instructor-api/course", {
           ...form,
           chapters: courseChapters,
         });
-      // axios throws on non-2xx automatically
       navigate("/instructor/dashboard");
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Failed to create course");

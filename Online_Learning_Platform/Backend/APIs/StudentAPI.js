@@ -414,8 +414,9 @@ studentApp.post("/enroll", verifyToken("STUDENT"), async (req, res, next) => {
         }
 
         const enrollmentDoc = new EnrollmentModel({
-            ...enrollObj,
-            course: course._id
+            student: student._id,
+            course: course._id,
+            payment: enrollObj.payment,
         });
 
         await enrollmentDoc.save();
@@ -500,6 +501,17 @@ studentApp.patch("/course", verifyToken("STUDENT"), async (req, res, next) => {
 studentApp.put("/course", verifyToken("STUDENT"), async (req, res, next) => {
     try {
         const { courseId, rating, comment } = req.body;
+        const studentIdOfToken = req.user?.id;
+
+        // Bug #3: Validate rating is a number between 1 and 5
+        const parsedRating = Number(rating);
+        if (!Number.isFinite(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+            return res.status(400).json({ message: "Rating must be a number between 1 and 5" });
+        }
+
+        if (!comment || comment.trim() === "") {
+            return res.status(400).json({ message: "Comment cannot be Empty" });
+        }
 
         const courseDocument = await CourseModel.findOne({ _id: courseId, isCourseActive: true }).populate("reviews.student");
 
@@ -507,13 +519,25 @@ studentApp.put("/course", verifyToken("STUDENT"), async (req, res, next) => {
             return res.status(404).json({ message: "Course not Found" });
         }
 
-        const studentIdOfToken = req.user?.id;
-
-        if (!comment || comment.trim() === "") {
-            return res.status(400).json({ message: "Comment cannot be Empty" });
+        // Bug #8: Verify student is actually enrolled in this course
+        const enrollment = await EnrollmentModel.findOne({
+            student: studentIdOfToken,
+            course: courseDocument._id,
+            status: { $ne: "Dropped" }
+        });
+        if (!enrollment) {
+            return res.status(403).json({ message: "You must be enrolled in this course to leave a review" });
         }
 
-        courseDocument.reviews.push({ student: studentIdOfToken, rating: rating, comment: comment });
+        // Bug #9: Prevent duplicate reviews — one review per student per course
+        const alreadyReviewed = courseDocument.reviews.some(
+            (r) => String(r.student?._id || r.student) === String(studentIdOfToken)
+        );
+        if (alreadyReviewed) {
+            return res.status(400).json({ message: "You have already reviewed this course" });
+        }
+
+        courseDocument.reviews.push({ student: studentIdOfToken, rating: parsedRating, comment: comment.trim() });
 
         await courseDocument.save();
 
