@@ -1,23 +1,93 @@
-###Read All Users
+### ============================================================
+###  ADMIN API — Online Learning Platform
+###  Base URL : http://localhost:1935/admin-api
+###  Auth     : Bearer token — login as ADMIN first via POST /auth/login
+###             then set: Authorization: Bearer <token>
+### ============================================================
+
+### ── USERS ────────────────────────────────────────────────────
+
+### [1] Get All Active Users
+###     Returns every user where isUserActive === true (password excluded).
 GET http://localhost:1935/admin-api/users
+Authorization: Bearer <token>
 
-###Read Enrollment Analytics
-GET http://localhost:1935/admin-api/analytics
+###
 
-###For User Deactivation
+### [2] Deactivate a User (soft disable — sets isUserActive to false)
+###     The user can no longer log in. Record is preserved in the database.
 PATCH http://localhost:1935/admin-api/users/deactivate
 Content-Type: application/json
+Authorization: Bearer <token>
 
 {
-    "userId":"69f97318d17f3f50ff7e5717",
-    "isUserActive":false
+    "userId": "683f1a2b4c5d6e7f8a9b0c1d",
+    "isUserActive": false
 }
 
-###For User Activation
+###
+
+### [3] Activate a User (re-enable — sets isUserActive back to true)
 PATCH http://localhost:1935/admin-api/users/activate
 Content-Type: application/json
+Authorization: Bearer <token>
 
 {
-    "userId":"69f97318d17f3f50ff7e5717",
-    "isUserActive":true
+    "userId": "683f1a2b4c5d6e7f8a9b0c1d",
+    "isUserActive": true
 }
+
+###
+
+### [4] Soft-Delete a User via URL param
+###     Immediately sets isUserActive to false.
+###     Useful for one-click disable from an admin dashboard table.
+DELETE http://localhost:1935/admin-api/users/683f1a2b4c5d6e7f8a9b0c1d
+Authorization: Bearer <token>
+
+###
+
+### ── COURSES ───────────────────────────────────────────────────
+
+### [5] Get ALL Courses (active AND inactive)
+###     Admin sees every course regardless of isCourseActive status.
+GET http://localhost:1935/admin-api/courses
+Authorization: Bearer <token>
+
+###
+
+### [6] Deactivate a Course (hide from students)
+###     Sets isCourseActive to false.
+PATCH http://localhost:1935/admin-api/courses/deactivate
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+    "courseId": "684a2c3d5e6f7a8b9c0d1e2f"
+}
+
+###
+
+### [7] Activate a Course (make visible again)
+###     Sets isCourseActive back to true.
+PATCH http://localhost:1935/admin-api/courses/activate
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+    "courseId": "684a2c3d5e6f7a8b9c0d1e2f"
+}
+
+###
+
+### ── ANALYTICS ─────────────────────────────────────────────────
+
+### [8] Get Platform Enrollment Analytics
+###     Returns:
+###       • courseEnrollmentCounts — per-course enrollment, completion,
+###                                  in-progress counts (sorted by enrolments)
+###       • leaderboard           — top 10 students by completed courses
+###       • totalEnrollments      — platform-wide count (excl. Dropped)
+###       • completedEnrollments  — count of Completed enrollments
+GET http://localhost:1935/admin-api/analytics
+Authorization: Bearer <token>

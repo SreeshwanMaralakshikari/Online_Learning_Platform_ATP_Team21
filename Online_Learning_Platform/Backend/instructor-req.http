@@ -1,42 +1,258 @@
-###Create a Course
+### ============================================================
+###  INSTRUCTOR API — Online Learning Platform
+###  Base URL : http://localhost:1935/instructor-api
+###  Auth     : Bearer token — login as INSTRUCTOR first via POST /auth/login
+###             then set: Authorization: Bearer <token>
+### ============================================================
+
+### ── MEDIA UPLOAD (Cloudinary) ────────────────────────────────
+
+### [1] Upload a Media File
+###     Accepts: images (JPEG/PNG/WEBP/GIF), videos (MP4/WEBM/OGG/MOV),
+###              PDFs, Word docs (.doc/.docx), PowerPoint (.ppt/.pptx),
+###              plain text (.txt). Max size: 200 MB per file.
+###     Field name MUST be "file".
+###     Returns a Cloudinary secure_url to use in course content.
+###
+###     How to use in VS Code REST Client:
+###       Replace the < path below with your local file path.
+###       The extension sends it as multipart/form-data automatically.
+POST http://localhost:1935/instructor-api/media
+Authorization: Bearer <token>
+Content-Type: multipart/form-data; boundary=----FormBoundary7MA4YWxkTrZu0gW
+
+------FormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="intro-lecture.mp4"
+Content-Type: video/mp4
+
+< ./sample-files/intro-lecture.mp4
+------FormBoundary7MA4YWxkTrZu0gW--
+
+###
+
+### ── COURSES ───────────────────────────────────────────────────
+
+### [2] Create a New Course (basic — no chapters yet)
+###     The instructor field is taken from the JWT; no need to pass it.
+###     Use PATCH /instructor-api/course/chapters after creation
+###     to add the full chapter + quiz structure.
 POST http://localhost:1935/instructor-api/course
 Content-Type: application/json
+Authorization: Bearer <token>
 
 {
-    "instructor": "69fd69a53a4dbe8a06a17114",
-    "title":"Java Programming",
-    "category":"OOPs",
-    "content":"Hello World! Welcome to the World of Java"
+    "title": "Mastering Java — From Zero to Hero",
+    "category": "Programming",
+    "thumbnail": "https://res.cloudinary.com/demo/image/upload/olp_media/java-banner.png",
+    "demoVideo": "https://res.cloudinary.com/demo/video/upload/olp_media/java-demo.mp4",
+    "price": 999,
+    "content": "A comprehensive Java course covering OOP, Collections, Streams, and Spring Boot."
 }
 
-###For Course Delete/Deactivation
-PATCH http://localhost:1935/instructor-api/courses/deactivate
+###
+
+### [3] Create a Course with Full Chapter Structure
+###     chapters[] holds the rich content: units (text/video/doc) + quiz per chapter.
+###     unitCount is auto-calculated from units.length — you can omit it.
+POST http://localhost:1935/instructor-api/course
 Content-Type: application/json
+Authorization: Bearer <token>
 
 {
-    "courseId":"69f9b1d7e84a03e61e14ade8",
-    "isCourseActive":false
+    "title": "React.js Complete Bootcamp 2025",
+    "category": "Web Development",
+    "thumbnail": "https://res.cloudinary.com/demo/image/upload/olp_media/react-banner.png",
+    "demoVideo": "https://res.cloudinary.com/demo/video/upload/olp_media/react-demo.mp4",
+    "price": 1499,
+    "content": "Master React from hooks to advanced patterns with real projects.",
+    "chapters": [
+        {
+            "title": "Getting Started with React",
+            "units": [
+                {
+                    "title": "What is React and Why Use It?",
+                    "textContent": "React is a declarative, component-based JavaScript library for building user interfaces. It was created by Facebook and is now maintained by Meta and the open-source community.",
+                    "videoContent": "https://res.cloudinary.com/demo/video/upload/olp_media/react-unit1.mp4",
+                    "documentContent": ""
+                },
+                {
+                    "title": "Setting Up the Development Environment",
+                    "textContent": "We will use Vite to scaffold our React project. Run: npm create vite@latest my-app -- --template react",
+                    "videoContent": "https://res.cloudinary.com/demo/video/upload/olp_media/react-unit2.mp4",
+                    "documentContent": "https://res.cloudinary.com/demo/raw/upload/olp_media/setup-guide.pdf"
+                }
+            ],
+            "quiz": [
+                {
+                    "question": "Which company originally created React?",
+                    "options": ["Google", "Meta (Facebook)", "Microsoft", "Twitter"],
+                    "answerIndex": 1
+                }
+            ]
+        },
+        {
+            "title": "React Hooks Deep Dive",
+            "units": [
+                {
+                    "title": "useState and useEffect",
+                    "textContent": "useState manages local component state. useEffect runs side effects like data fetching after render.",
+                    "videoContent": "https://res.cloudinary.com/demo/video/upload/olp_media/react-unit3.mp4",
+                    "documentContent": ""
+                }
+            ],
+            "quiz": [
+                {
+                    "question": "Which hook is used to run code after every render?",
+                    "options": ["useState", "useContext", "useEffect", "useReducer"],
+                    "answerIndex": 2
+                }
+            ]
+        }
+    ]
 }
 
-###For Reading Own Courses
+###
+
+### [4] Get All My Courses
+###     Returns all courses created by the logged-in instructor.
 GET http://localhost:1935/instructor-api/courses
+Authorization: Bearer <token>
 
-###For Course Activation
-PATCH http://localhost:1935/instructor-api/courses/activate
-Content-Type: application/json
+###
 
-{
-    "courseId":"69f9b1d7e84a03e61e14ade8",
-    "isCourseActive":true
-}
-
-###Course Update
+### [5] Update Course Metadata (title, category, thumbnail, demoVideo, price, content)
+###     Only the owning instructor can update it.
+###     courseId is required; all other fields are optional.
 PUT http://localhost:1935/instructor-api/course
 Content-Type: application/json
+Authorization: Bearer <token>
 
 {
-    "courseId": "69fad80f9d09dc4e59f9a17f",
-    "title":"Java Programming",
-    "category":"OOPs",
-    "content":"Hello World! Welcome to the World of Java. Java is a Object Oriented Language"
+    "courseId": "684a2c3d5e6f7a8b9c0d1e2f",
+    "title": "Mastering Java — Complete Bootcamp 2025",
+    "category": "Programming",
+    "thumbnail": "https://res.cloudinary.com/demo/image/upload/olp_media/java-banner-v2.png",
+    "demoVideo": "https://res.cloudinary.com/demo/video/upload/olp_media/java-demo-v2.mp4",
+    "price": 1199,
+    "content": "A deep-dive into Java 21, Spring Boot 3, and Microservices architecture."
+}
+
+###
+
+### [6] Update / Replace All Chapters for a Course
+###     Replaces the entire chapters array in one call.
+###     Use this from the course editor after the instructor finishes editing.
+PATCH http://localhost:1935/instructor-api/course/chapters
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+    "courseId": "684a2c3d5e6f7a8b9c0d1e2f",
+    "chapters": [
+        {
+            "title": "Getting Started with Java",
+            "units": [
+                {
+                    "title": "Introduction & JDK 21 Setup",
+                    "textContent": "Download the JDK 21 LTS from https://adoptium.net and set JAVA_HOME in your environment variables.",
+                    "videoContent": "https://res.cloudinary.com/demo/video/upload/olp_media/java-unit1-v2.mp4",
+                    "documentContent": "https://res.cloudinary.com/demo/raw/upload/olp_media/jdk-setup.pdf"
+                },
+                {
+                    "title": "Hello World — Deep Dive",
+                    "textContent": "Every Java program starts with a class. The main method is the entry point: public static void main(String[] args).",
+                    "videoContent": "https://res.cloudinary.com/demo/video/upload/olp_media/java-unit2-v2.mp4",
+                    "documentContent": ""
+                }
+            ],
+            "quiz": [
+                {
+                    "question": "Which method is the entry point of a Java application?",
+                    "options": ["start()", "run()", "main()", "init()"],
+                    "answerIndex": 2
+                }
+            ]
+        },
+        {
+            "title": "OOP Fundamentals",
+            "units": [
+                {
+                    "title": "Classes, Objects & Constructors",
+                    "textContent": "A class is a blueprint; an object is an instance. Constructors initialise the object state when it is created.",
+                    "videoContent": "https://res.cloudinary.com/demo/video/upload/olp_media/java-unit3-v2.mp4",
+                    "documentContent": ""
+                },
+                {
+                    "title": "Inheritance and Polymorphism",
+                    "textContent": "Inheritance lets a child class reuse parent behaviour. Polymorphism allows a parent reference to point to a child object.",
+                    "videoContent": "https://res.cloudinary.com/demo/video/upload/olp_media/java-unit4-v2.mp4",
+                    "documentContent": ""
+                }
+            ],
+            "quiz": [
+                {
+                    "question": "What keyword is used to inherit a class in Java?",
+                    "options": ["implements", "extends", "inherits", "super"],
+                    "answerIndex": 1
+                },
+                {
+                    "question": "What is runtime polymorphism also called?",
+                    "options": ["Method overloading", "Method overriding", "Abstraction", "Encapsulation"],
+                    "answerIndex": 1
+                }
+            ]
+        }
+    ]
+}
+
+###
+
+### [7] Toggle Course Visibility (single unified route)
+###     isCourseActive: false → deactivates (hidden from students)
+###     isCourseActive: true  → activates (visible to students)
+PATCH http://localhost:1935/instructor-api/courses/toggle-status
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+    "courseId": "684a2c3d5e6f7a8b9c0d1e2f",
+    "isCourseActive": false
+}
+
+###
+
+### [8] Activate a Course (same toggle-status route, true value)
+PATCH http://localhost:1935/instructor-api/courses/toggle-status
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+    "courseId": "684a2c3d5e6f7a8b9c0d1e2f",
+    "isCourseActive": true
+}
+
+###
+
+### ── DOUBTS ────────────────────────────────────────────────────
+
+### [9] Get All Student Doubts for My Courses
+###     Returns doubts posted by students actively enrolled in any of
+###     the logged-in instructor's courses (Dropped students excluded).
+###     Includes: student info, course info, matched doubt, instructor reply,
+###               peer answers, repliedBy, matchedStudent.
+GET http://localhost:1935/instructor-api/doubts
+Authorization: Bearer <token>
+
+###
+
+### [10] Reply to a Student Doubt
+###      The instructor can only reply to doubts from their own courses.
+###      The student must still be enrolled (not Dropped).
+###      Sets status → "Answered", records repliedBy + repliedAt.
+PATCH http://localhost:1935/instructor-api/doubts/684d1e2f3a4b5c6d7e8f9a0b/reply
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+    "reply": "Great question! In Java, polymorphism allows a parent-class reference to hold a child-class object. When you call an overridden method on that reference, the JVM resolves it at runtime — this is called dynamic dispatch. See Chapter 2, Unit 4 for a live code example."
 }

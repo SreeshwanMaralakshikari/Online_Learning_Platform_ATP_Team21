@@ -13,6 +13,8 @@ export default function InstructorDashboard() {
   const { user } = useAuth();
   const [courses, setCourses] = useState([]);
   const [doubts, setDoubts] = useState([]);
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [replying, setReplying] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toggling, setToggling] = useState(null);
@@ -72,6 +74,23 @@ export default function InstructorDashboard() {
       setError(err.response?.data?.message || err.message || "Failed to update course");
     } finally {
       setToggling(null);
+    }
+  };
+
+  // Inline reply-to-doubt: allows replying directly from the dashboard without visiting InstructorDoubts page
+  const handleReply = async (doubtId) => {
+    const reply = replyDrafts[doubtId] || "";
+    if (!reply.trim()) { setError("Reply cannot be empty"); return; }
+    setReplying(doubtId);
+    setError("");
+    try {
+      const res = await axiosInstance.patch(`/instructor-api/doubts/${doubtId}/reply`, { reply });
+      setDoubts((items) => items.map((item) => (item._id === doubtId ? res.data.payload : item)));
+      setReplyDrafts((items) => ({ ...items, [doubtId]: "" }));
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to reply");
+    } finally {
+      setReplying(null);
     }
   };
 
@@ -186,6 +205,17 @@ export default function InstructorDashboard() {
           </div>
         )}
 
+        {/* ── Inline Doubts Panel ────────────────────────────────────────────── */}
+        {!loading && doubts.length > 0 && (
+          <InstructorDoubtsPanel
+            doubts={doubts}
+            replyDrafts={replyDrafts}
+            replying={replying}
+            onReplyChange={setReplyDrafts}
+            onReply={handleReply}
+          />
+        )}
+
         {!loading && activeCourses.length > 0 && (
           <div className="mb-8">
             <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
@@ -225,6 +255,83 @@ export default function InstructorDashboard() {
         )}
       </section>
     </main>
+  );
+}
+
+function InstructorDoubtsPanel({ doubts, replyDrafts, replying, onReplyChange, onReply }) {
+  return (
+    <section className="app-panel mb-8 p-6">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="app-eyebrow">Student doubts</p>
+          <h2 className="text-xl font-semibold text-slate-950 dark:text-white">Reply to enrolled learners</h2>
+        </div>
+        <p className="max-w-md text-sm leading-6 text-slate-500">
+          Doubts appear here only when the student is registered in one of your courses.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {doubts.slice(0, 6).map((doubt) => {
+          const studentName = [doubt.student?.firstName, doubt.student?.lastName].filter(Boolean).join(" ") || doubt.student?.email || "Student";
+          const instructorName = [doubt.repliedBy?.firstName, doubt.repliedBy?.lastName].filter(Boolean).join(" ") || doubt.repliedBy?.email || "Instructor";
+
+          return (
+            <article key={doubt._id} className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-950 dark:text-white">{doubt.topic}</h3>
+                {doubt.audience === "instructor" && (
+                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                    Direct to instructor
+                  </span>
+                )}
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  doubt.status === "Answered" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                }`}>
+                  {doubt.status}
+                </span>
+              </div>
+              <p className="text-xs font-semibold text-slate-500">
+                {studentName} | {doubt.course?.title || "Course"}
+              </p>
+              {(doubt.chapterTitle || doubt.unitTitle) && (
+                <p className="mt-1 text-xs font-semibold text-blue-700">
+                  {[doubt.chapterTitle, doubt.unitTitle].filter(Boolean).join(" | ")}
+                </p>
+              )}
+              <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">{doubt.description}</p>
+
+              {doubt.instructorReply && (
+                <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">
+                    Reply from {instructorName}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-emerald-950">{doubt.instructorReply}</p>
+                </div>
+              )}
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <textarea
+                  rows={2}
+                  value={replyDrafts[doubt._id] || ""}
+                  onChange={(event) => onReplyChange((items) => ({ ...items, [doubt._id]: event.target.value }))}
+                  placeholder={doubt.instructorReply ? "Update your reply" : "Write a reply for this student"}
+                  className="app-textarea resize-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => onReply(doubt._id)}
+                  disabled={replying === doubt._id}
+                  className="app-button-primary shrink-0 sm:self-start"
+                >
+                  {replying === doubt._id ? "Sending..." : doubt.instructorReply ? "Update" : "Reply"}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

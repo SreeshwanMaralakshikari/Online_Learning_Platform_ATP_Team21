@@ -1,42 +1,181 @@
-#Route for Register(Student and Instructor)
+### ============================================================
+###  COMMON API — Online Learning Platform
+###  Base URL : http://localhost:1935/auth
+###  Auth     : Bearer token in Authorization header
+###             Token is returned by /login; store it and send as:
+###             Authorization: Bearer <token>
+###  Roles    : STUDENT | INSTRUCTOR | ADMIN
+### ============================================================
+
+### ── REGISTER ─────────────────────────────────────────────────
+
+### [1] Register a new STUDENT
 POST http://localhost:1935/auth/register
 Content-Type: application/json
 
 {
-    "firstName": "admin",
-    "lastName": "rollno2",
-    "email": "admin@gmail.com",
-    "password": "admin",
-    "role": "ADMIN",
-    "profileImageUrl": "#"
+    "firstName": "Arjun",
+    "lastName": "Mehta",
+    "email": "arjun.mehta@example.com",
+    "password": "Student@123",
+    "role": "STUDENT",
+    "profileImageUrl": "https://example.com/avatars/arjun.png",
+    "headline": "Aspiring Full-Stack Developer",
+    "bio": "I love learning new technologies and building web apps.",
+    "location": "Hyderabad, Telangana",
+    "phone": "9876543210"
 }
 
-###Route for Login(Student, Instructor)
+###
+
+### [2] Register a new INSTRUCTOR
+POST http://localhost:1935/auth/register
+Content-Type: application/json
+
+{
+    "firstName": "Priya",
+    "lastName": "Sharma",
+    "email": "priya.sharma@example.com",
+    "password": "Instructor@456",
+    "role": "INSTRUCTOR",
+    "profileImageUrl": "https://example.com/avatars/priya.png",
+    "headline": "Senior Software Engineer & Educator",
+    "bio": "10+ years of experience in Java, Spring Boot, and Microservices.",
+    "location": "Bangalore, Karnataka",
+    "phone": "9988776655"
+}
+
+###
+
+### [3] Register an ADMIN
+###     NOTE: The register route blocks ADMIN by default (allowedRoles check).
+###           Seed the first admin directly via the database or a trusted script.
+POST http://localhost:1935/auth/register
+Content-Type: application/json
+
+{
+    "firstName": "Admin",
+    "lastName": "User",
+    "email": "admin@olp.com",
+    "password": "Admin@789",
+    "role": "ADMIN",
+    "profileImageUrl": "https://example.com/avatars/admin.png"
+}
+
+###
+
+### ── LOGIN ────────────────────────────────────────────────────
+###  The response body contains { token: "..." }.
+###  Copy that token and paste it into the Authorization header below.
+
+### [4] Login — Student
 POST http://localhost:1935/auth/login
 Content-Type: application/json
 
 {
-    "email": "admin@gmail.com",
-    "password": "admin"
+    "email": "arjun.mehta@example.com",
+    "password": "Student@123"
 }
 
-###Route for Logout(Student, Instructor and Admin)
-GET http://localhost:1935/auth/logout
+###
 
-###Route for changing Password
-PUT http://localhost:1935/auth/password
+### [5] Login — Instructor
+POST http://localhost:1935/auth/login
 Content-Type: application/json
 
 {
-    "currentPassword":"admin",
-    "newPassword":"admin1"
+    "email": "priya.sharma@example.com",
+    "password": "Instructor@456"
 }
 
-###Route for forgot password
+###
+
+### [6] Login — Admin
+POST http://localhost:1935/auth/login
+Content-Type: application/json
+
+{
+    "email": "admin@olp.com",
+    "password": "Admin@789"
+}
+
+###
+
+### ── LOGOUT / SESSION ─────────────────────────────────────────
+
+### [7] Logout
+###     Server returns success; frontend removes the token from localStorage.
+GET http://localhost:1935/auth/logout
+
+###
+
+### [8] Check Auth — verify the Bearer token is still valid
+###     Returns { message: "authenticated", payload: <decoded JWT> }
+###     Replace <token> with the value from your last /login response.
+GET http://localhost:1935/auth/check-auth
+Authorization: Bearer <token>
+
+###
+
+### ── PASSWORD ─────────────────────────────────────────────────
+
+### [9] Change Password (must be logged in)
+###     Verifies currentPassword before applying the update.
+PUT http://localhost:1935/auth/password
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+    "currentPassword": "Student@123",
+    "newPassword": "UpdatedStudent@321"
+}
+
+###
+
+### [10] Forgot Password (no login required)
+###      Only works when ENABLE_FORGOT_PASSWORD=true in .env.
+###      In production, keep this disabled and use a proper OTP flow.
 PUT http://localhost:1935/auth/forgot-password
 Content-Type: application/json
 
 {
-    "email":"admin@gmail.com",
-    "newPassword":"admin123"
+    "email": "arjun.mehta@example.com",
+    "newPassword": "ResetStudent@999"
+}
+
+###
+
+### ── PUBLIC COURSES ───────────────────────────────────────────
+
+### [11] Get All Active Courses (no auth required)
+###      Used on the homepage course preview / hero section.
+GET http://localhost:1935/auth/courses
+
+###
+
+### ── PROFILE ──────────────────────────────────────────────────
+
+### [12] Get Logged-in User Profile (any role)
+GET http://localhost:1935/auth/profile
+Authorization: Bearer <token>
+
+###
+
+### [13] Update Logged-in User Profile (any role)
+###      Allowed fields: firstName, lastName, email, profileImageUrl,
+###                      headline, bio, location, phone.
+###      Returns a fresh token with updated data.
+PUT http://localhost:1935/auth/profile
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+    "firstName": "Arjun",
+    "lastName": "Mehta",
+    "email": "arjun.mehta@example.com",
+    "profileImageUrl": "https://example.com/avatars/arjun-v2.png",
+    "headline": "Full-Stack Developer | React & Node.js",
+    "bio": "Passionate about building scalable web applications.",
+    "location": "Chennai, Tamil Nadu",
+    "phone": "9123456789"
 }

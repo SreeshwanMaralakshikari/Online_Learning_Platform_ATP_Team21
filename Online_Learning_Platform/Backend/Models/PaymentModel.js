@@ -18,9 +18,10 @@ const paymentSchema = new Schema({
         min: [0, "Amount cannot be negative"]
     },
 
+    // Added FREE to support zero-cost course enrollments without a payment gateway
     method: {
         type: String,
-        enum: ["CARD", "UPI", "NET_BANKING", "WALLET"],
+        enum: ["CARD", "UPI", "NET_BANKING", "WALLET", "FREE"],
         required: [true, "Payment method is required"]
     },
 
@@ -33,7 +34,7 @@ const paymentSchema = new Schema({
     transactionId: {
         type: String,
         required: true,
-        unique: [true,"transactionId must be Unique"]
+        unique: [true, "transactionId must be Unique"]
     },
     paidAt: {
         type: Date,
@@ -45,4 +46,4 @@ const paymentSchema = new Schema({
     strict: "throw"
 });
 
-export const PaymentModel=model("payment",paymentSchema);
+export const PaymentModel = model("payment", paymentSchema);

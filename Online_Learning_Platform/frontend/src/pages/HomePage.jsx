@@ -120,7 +120,7 @@ function CourseCard({ course, onEnroll, isLoggedIn, isEnrolled }) {
         <div className="mt-auto flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
           <div className="flex items-center gap-1 text-amber-500" aria-label="Course rating">
             <span className="text-sm font-bold">4.7</span>
-            <span className="text-xs">?????</span>
+            <span className="text-xs">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
           </div>
           <button
             type="button"

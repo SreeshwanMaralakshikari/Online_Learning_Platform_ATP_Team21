@@ -41,7 +41,8 @@ studentApp.get("/courses", verifyToken("STUDENT"), async (req, res, next) => {
 });
 
 // Protected Student Route to pay for a Course
-// FIX: After a successful payment, automatically creates an enrollment if one doesn't exist yet.
+// After a successful payment, automatically creates an enrollment if one doesn't exist yet.
+// Supports FREE method for zero-cost courses (amount = 0, method = "FREE").
 studentApp.post("/pay", verifyToken("STUDENT"), async (req, res, next) => {
     try {
         const { course: courseId, method, transactionId, status = "SUCCESS", amount } = req.body;
@@ -96,12 +97,12 @@ studentApp.post("/pay", verifyToken("STUDENT"), async (req, res, next) => {
         await newPaymentDoc.save();
 
         if (existingEnrollment) {
-            // Student was previously dropped — update their payment record
+            // Student was previously dropped — update their payment record and re-enroll
             existingEnrollment.payment = newPaymentDoc._id;
             existingEnrollment.status = "Enrolled";
             await existingEnrollment.save();
         } else {
-            // FIX: New student — create the enrollment that the /enroll route would otherwise require
+            // New student — create enrollment automatically (no need to call /enroll separately)
             const newEnrollment = new EnrollmentModel({
                 student: student._id,
                 course: course._id,
@@ -377,13 +378,13 @@ studentApp.post("/doubts/:doubtId/answers", verifyToken("STUDENT"), async (req, 
 });
 
 // Protected Student Route to Enroll in a Course
-// FIX: Added try/catch, validates payment field (required by schema), proper error messages.
+// payment is required; validates student identity; prevents duplicate enrollments.
 studentApp.post("/enroll", verifyToken("STUDENT"), async (req, res, next) => {
     try {
         const enrollObj = req.body;
         const user = req.user;
 
-        // FIX: payment is required in EnrollmentModel — validate before attempting save
+        // payment is required in EnrollmentModel — validate before attempting save
         if (!enrollObj.payment) {
             return res.status(400).json({ message: "Payment ID is required to enroll" });
         }
@@ -430,15 +431,15 @@ studentApp.post("/enroll", verifyToken("STUDENT"), async (req, res, next) => {
     }
 });
 
-// Protected Student Route to View All Courses which the student enrolled in
-// FIX: Added try/catch. Also filter out Dropped enrollments.
+// Protected Student Route to View All Courses the student is enrolled in
+// Excludes Dropped enrollments; only shows active courses.
 studentApp.get("/course", verifyToken("STUDENT"), async (req, res, next) => {
     try {
         const studentId = req.user?.id;
 
         const studentCourseList = await EnrollmentModel.find({
             student: studentId,
-            status: { $ne: "Dropped" }   // FIX: exclude dropped enrollments
+            status: { $ne: "Dropped" }
         })
             .populate({
                 path: "course",
@@ -455,6 +456,8 @@ studentApp.get("/course", verifyToken("STUDENT"), async (req, res, next) => {
 });
 
 // Protected Student Route to update enrollment status/progress
+// Supports: progress (0-100), status override, timeSpentMinutes accumulation.
+// Status auto-resolves: 0% → Enrolled, 1-99% → In Progress, 100% → Completed.
 studentApp.patch("/course", verifyToken("STUDENT"), async (req, res, next) => {
     try {
         const { courseId, status, progress, timeSpentMinutes } = req.body;
@@ -497,13 +500,46 @@ studentApp.patch("/course", verifyToken("STUDENT"), async (req, res, next) => {
     }
 });
 
+// Protected Student Route to mark a chapter as completed
+// Adds chapterId to completedChapter array; prevents duplicate entries.
+studentApp.patch("/course/chapter-complete", verifyToken("STUDENT"), async (req, res, next) => {
+    try {
+        const { courseId, chapterId } = req.body;
+        const studentId = req.user?.id;
+
+        if (!courseId || !chapterId) {
+            return res.status(400).json({ message: "courseId and chapterId are required" });
+        }
+
+        const enrollmentOfDb = await EnrollmentModel.findOne({ student: studentId, course: courseId, status: { $ne: "Dropped" } });
+
+        if (!enrollmentOfDb) {
+            return res.status(403).json({ message: "Enrollment not found for this course" });
+        }
+
+        const alreadyCompleted = enrollmentOfDb.completedChapter.some(
+            (ch) => String(ch.chapterId) === String(chapterId)
+        );
+        if (alreadyCompleted) {
+            return res.status(200).json({ message: "Chapter already marked as completed", payload: enrollmentOfDb });
+        }
+
+        enrollmentOfDb.completedChapter.push({ chapterId });
+        await enrollmentOfDb.save();
+
+        res.status(200).json({ message: "Chapter marked as completed", payload: enrollmentOfDb });
+    } catch (err) {
+        next(err);
+    }
+});
+
 // Protected Route to Add Review to Course
+// Validates rating (1-5), requires enrollment, prevents duplicate reviews.
 studentApp.put("/course", verifyToken("STUDENT"), async (req, res, next) => {
     try {
         const { courseId, rating, comment } = req.body;
         const studentIdOfToken = req.user?.id;
 
-        // Bug #3: Validate rating is a number between 1 and 5
         const parsedRating = Number(rating);
         if (!Number.isFinite(parsedRating) || parsedRating < 1 || parsedRating > 5) {
             return res.status(400).json({ message: "Rating must be a number between 1 and 5" });
@@ -519,7 +555,7 @@ studentApp.put("/course", verifyToken("STUDENT"), async (req, res, next) => {
             return res.status(404).json({ message: "Course not Found" });
         }
 
-        // Bug #8: Verify student is actually enrolled in this course
+        // Verify student is actually enrolled in this course
         const enrollment = await EnrollmentModel.findOne({
             student: studentIdOfToken,
             course: courseDocument._id,
@@ -529,7 +565,7 @@ studentApp.put("/course", verifyToken("STUDENT"), async (req, res, next) => {
             return res.status(403).json({ message: "You must be enrolled in this course to leave a review" });
         }
 
-        // Bug #9: Prevent duplicate reviews — one review per student per course
+        // Prevent duplicate reviews — one review per student per course
         const alreadyReviewed = courseDocument.reviews.some(
             (r) => String(r.student?._id || r.student) === String(studentIdOfToken)
         );
